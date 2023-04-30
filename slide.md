@@ -34,7 +34,26 @@ style: |
 
 ---
 
+<!-- _class: section -->
 # おことわり
+
+---
+
+# 本スライドのコンセプト
+
+**網羅率を代償に、正しさを持って速習すること。**
+
+雑に新しいものを学ぶならChatGPTを用いるのが早い。
+また、Vulkanは文献が乏しいながら、皆無というわけではない。
+
+しかし、ChatGPTは勿論嘘を吐くし、
+解説書は specific なプログラムを組む場合がある(一つの物体しか扱わないとか)。
+
+本スライドでは、それらに比べ、正しく・一般的な理解を促進したい。
+
+---
+
+# 想定の対象
 
 次の程度のリテラシーが大前提となっています：
 * C言語が分かる
@@ -42,8 +61,21 @@ style: |
 * コンピュータアーキテクチャがある程度分かる
 * 「DirectX」とか「シェーダ」くらいは聞いたことがある
 
-また、スライドにコードは掲載しません。適宜以下を参照してください。
+---
+
+# サンプルコード
+
+本スライドには断片的にしか掲載しません。
+適宜以下のリンクを参照してください。
 https://github.com/Tengu712/Vulkan-Tutorial
+
+尚、**独特**なコーディング規則について、以下のよう：
+
+* 列数に上限なし
+* ifの分岐後命令が一つなら中括弧なし
+* ifの分岐後命令が一つかつbreak、continue、returnなら改行
+* 構造体の実体は初期化子で初期化
+* 初期化子内は余程短くない限り改行
 
 ---
 
@@ -51,7 +83,8 @@ https://github.com/Tengu712/Vulkan-Tutorial
 
 どのくらい参考したかはともかく、ぼくがVulkanを勉強する上で参考にした文献：
 
-* 山田英伸(すらりんラボ)『Vulkan Programming Vol.1』
+* Fadis(FADIS PRESS)『3DグラフィクスAPI Vulkanを出来るだけやさしく解説する本』
+* すらりん(すらりんラボ)『Vulkan Programming Vol.1』
 
 局所的には、各頁に示す。
 
@@ -115,7 +148,7 @@ https://www.khronos.org/files/vulkan11-reference-guide.pdf
 
 ---
 
-# 今回扱うレンダリングパイプラインの部分
+# 今回扱う部分
 
 ![bg right:65% height:95%](./img/vulkan-rendering-pipeline-diagram-in-tutorial.svg)
 
@@ -129,5 +162,21 @@ Vulkanを**設定**して、Vulkanを介してGPUを扱う。
 
 ---
 
-# 
+<!-- _class: section -->
+# 空のアプリ
+
+---
+
+# ウィンドウ作成
+
+解説の都合上GLFWを用いる。
+普通、WindowsならWin32API、LinuxならXlibを用いる。
+
+GLFWとは、端的に、OpenGLを扱いやすくするためのライブラリ。
+Windows/Linux/macOSでウィンドウを作れる。
+
+GLFW：
+https://www.glfw.org/
+
+---
 
