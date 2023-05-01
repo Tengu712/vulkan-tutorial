@@ -7,7 +7,7 @@ static PFN_vkDestroyDebugReportCallbackEXT g_vkDestroyDebugReportCallback;
 static VkDebugReportCallbackEXT g_debug_report_callback;
 
 static void glfw_error_callback(int code, const char* description) {
-    printf("[ GLFW ] %s : %d\n", description, code);
+    printf("[ GLFW    ] %s : %d\n", description, code);
 }
 
 void set_glfw_error_callback() {
@@ -24,7 +24,7 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL vulkan_debug_callback(
     const char* pMessage,
     void* pUserData
 ) {
-    printf("[ Vulkan ] %s\n", pMessage);
+    printf("[ Vulkan  ] %s\n", pMessage);
     return VK_FALSE;
 }
 
@@ -34,7 +34,7 @@ VkResult set_vulkan_debug_callback(const VkInstance instance) {
     VkDebugReportCallbackCreateInfoEXT ci = {
         VK_STRUCTURE_TYPE_DEBUG_REPORT_CALLBACK_CREATE_INFO_EXT,
         NULL,
-        VK_DEBUG_REPORT_ERROR_BIT_EXT | VK_DEBUG_REPORT_WARNING_BIT_EXT | VK_DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT | VK_DEBUG_REPORT_INFORMATION_BIT_EXT,
+        VK_DEBUG_REPORT_ERROR_BIT_EXT | VK_DEBUG_REPORT_WARNING_BIT_EXT | VK_DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT,
         (PFN_vkDebugReportCallbackEXT)&vulkan_debug_callback,
         NULL,
     };

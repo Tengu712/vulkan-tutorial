@@ -72,6 +72,7 @@ int main() {
         VkQueueFamilyProperties *props = (VkQueueFamilyProperties *)malloc(sizeof(VkQueueFamilyProperties) * cnt);
         vkGetPhysicalDeviceQueueFamilyProperties(phys_device, &cnt, props);
         // NOTE: グラフィックスパイプラインを扱えるキューファミリを選択する。
+        // NOTE: 例えばVK_QUEUE_COMPUTE_BITならコンピュートパイプラインをマスクできる。今回は描画目的なので不要。
         for (int32_t i = 0; i < cnt; ++i) {
             if ((props[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) > 0) {
                 queue_family_index = i;
@@ -124,6 +125,7 @@ int main() {
     }
 
     // termination
+    vkDeviceWaitIdle(device);
     vkDestroyDevice(device, NULL);
     DESTROY_VULKAN_DEBUG_CALLBACK(instance);
     vkDestroyInstance(instance, NULL);
