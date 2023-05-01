@@ -1,37 +1,4 @@
-#include <stdio.h>
-#include <stdlib.h>
-
-#define GLFW_INCLUDE_VULKAN
-
-#include <GLFW/glfw3.h>
-#include <vulkan/vulkan.h>
-
-#define CHECK(p, s) if (!(p)) { fprintf(stderr, "%s\n", (s)); return 1; }
-#define CHECK_VK(p, s) if ((p) != VK_SUCCESS) { fprintf(stderr, (s)); return (p); }
-#define WINDOW_WIDTH 640
-#define WINDOW_HEIGHT 480
-#define WINDOW_TITLE "Vulkan Tutorial"
-#define DEVICE_EXT_NAMES_CNT 0
-#define DEVICE_EXT_NAMES { }
-
-#ifndef RELEASE_BUILD
-#    define SET_GLFW_ERROR_CALLBACK() glfwSetErrorCallback(glfw_error_callback)
-#    define INST_EXT_NAMES_CNT 2
-#    define INST_EXT_NAMES { "VK_EXT_debug_report", "VK_EXT_debug_utils" }
-#    define INST_LAYER_NAMES_CNT 1
-#    define INST_LAYER_NAMES { "VK_LAYER_KHRONOS_validation" }
-#else
-#    define SET_GLFW_ERROR_CALLBACK()
-#    define INST_EXT_NAMES_CNT 0
-#    define INST_EXT_NAMES { }
-#    define INST_LAYER_NAMES_CNT 0
-#    define INST_LAYER_NAMES { }
-#endif
-
-// A callback function for GLFW
-static void glfw_error_callback(int code, const char* description) {
-    printf("%s : %d\n", description, code);
-}
+#include "common/vulkan-tutorial.h"
 
 int main() {
     // window
@@ -72,36 +39,29 @@ int main() {
         CHECK_VK(vkCreateInstance(&ci, NULL, &instance), "failed to create a Vulkan instance.");
     }
 
+    // debug
+    SET_VULKAN_DEBUG_CALLBACK(instance);
+
     // physical device
-    // NOTE: 物理デバイスを選択する。
     VkPhysicalDevice phys_device;
     VkPhysicalDeviceMemoryProperties phys_device_memory_prop;
     {
-        // NOTE: 物理デバイスのリストを取得する。
         uint32_t cnt = 0;
         CHECK_VK(vkEnumeratePhysicalDevices(instance, &cnt, NULL), "failed to get the number of physical devices.");
         VkPhysicalDevice *phys_devices = (VkPhysicalDevice *)malloc(sizeof(VkPhysicalDevice) * cnt);
         CHECK_VK(vkEnumeratePhysicalDevices(instance, &cnt, phys_devices), "failed to enumerate physical devices.");
-        // NOTE: リストの最初の物理デバイスを選択する。
-        // NOTE: 当然ながら、各々のスペックを見て適切に選択すべき。
         phys_device = phys_devices[0];
-        // NOTE: 物理デバイスのメモリ詳細を取得する。
         vkGetPhysicalDeviceMemoryProperties(phys_device, &phys_device_memory_prop);
-        // NOTE: リストは不要なので解放する。
         free(phys_devices);
     }
 
     // queue family index
-    // NOTE: 論理デバイスを作成するためにキューファミリを選択する。
-    // NOTE: 本プログラムでは一つのキューファミリを用いる。
     int32_t queue_family_index = -1;
     {
-        // NOTE: キューファミリのリストを取得する。
         uint32_t cnt = 0;
         vkGetPhysicalDeviceQueueFamilyProperties(phys_device, &cnt, NULL);
         VkQueueFamilyProperties *props = (VkQueueFamilyProperties *)malloc(sizeof(VkQueueFamilyProperties) * cnt);
         vkGetPhysicalDeviceQueueFamilyProperties(phys_device, &cnt, props);
-        // NOTE: グラフィックスパイプラインを扱えるキューファミリを選択する。
         for (int32_t i = 0; i < cnt; ++i) {
             if ((props[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) > 0) {
                 queue_family_index = i;
@@ -109,15 +69,12 @@ int main() {
             }
         }
         CHECK(queue_family_index >= 0, "failed to find a queue family index.");
-        // NOTE: リストは不要なので解放する。
         free(props);
     }
 
     // device
-    // NOTE: 論理デバイスを作成する。
     VkDevice device;
     {
-        // NOTE: 論理デバイスで用いるキューの設定。
         const float queue_priorities[] = { 1.0 };
         const VkDeviceQueueCreateInfo queue_cis[] = {
             {
@@ -129,7 +86,6 @@ int main() {
                 queue_priorities,
             },
         };
-        // NOTE: 論理デバイスを作成する。
         const char *ext_names[] = DEVICE_EXT_NAMES;
         const VkDeviceCreateInfo ci = {
             VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
@@ -146,6 +102,25 @@ int main() {
         CHECK_VK(vkCreateDevice(phys_device, &ci, NULL, &device), "failed to create a device.");
     }
 
+    // queue
+    // NOTE: キューファミリの中の最初のキューを選択する。
+    VkQueue queue;
+    vkGetDeviceQueue(device, queue_family_index, 0, &queue);
+
+    // command pool
+    // NOTE: コマンドプールを作成する。
+    VkCommandPool command_pool;
+    {
+        // NOTE: VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BITを指定すると、各々コマンドバッファをリセットできる。
+        const VkCommandPoolCreateInfo ci = {
+            VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+            NULL,
+            VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
+            queue_family_index,
+        };
+        CHECK_VK(vkCreateCommandPool(device, &ci, NULL, &command_pool), "failed to create a command pool.");
+    }
+
     // mainloop
     while (1) {
         if (glfwWindowShouldClose(window))
@@ -154,7 +129,9 @@ int main() {
     }
 
     // termination
+    vkDestroyCommandPool(device, command_pool, NULL);
     vkDestroyDevice(device, NULL);
+    DESTROY_VULKAN_DEBUG_CALLBACK(instance);
     vkDestroyInstance(instance, NULL);
     glfwTerminate();
 

@@ -1,35 +1,4 @@
-#include <stdio.h>
-
-// NOTE: VulkanでGLFWのウィンドウを用いるときは必須のマクロ。
-#define GLFW_INCLUDE_VULKAN
-
-#include <GLFW/glfw3.h>
-#include <vulkan/vulkan.h>
-
-#define CHECK(p, s) if (!(p)) { fprintf(stderr, "%s\n", (s)); return 1; }
-#define CHECK_VK(p, s) if ((p) != VK_SUCCESS) { fprintf(stderr, (s)); return (p); }
-#define WINDOW_WIDTH 640
-#define WINDOW_HEIGHT 480
-#define WINDOW_TITLE "Vulkan Tutorial"
-
-#ifndef RELEASE_BUILD
-#    define SET_GLFW_ERROR_CALLBACK() glfwSetErrorCallback(glfw_error_callback)
-#    define INST_EXT_NAMES_CNT 2
-#    define INST_EXT_NAMES { "VK_EXT_debug_report", "VK_EXT_debug_utils" }
-#    define INST_LAYER_NAMES_CNT 1
-#    define INST_LAYER_NAMES { "VK_LAYER_KHRONOS_validation" }
-#else
-#    define SET_GLFW_ERROR_CALLBACK()
-#    define INST_EXT_NAMES_CNT 0
-#    define INST_EXT_NAMES { }
-#    define INST_LAYER_NAMES_CNT 0
-#    define INST_LAYER_NAMES { }
-#endif
-
-// A callback function for GLFW
-void glfw_error_callback(int code, const char* description) {
-    printf("%s : %d\n", description, code);
-}
+#include "common/vulkan-tutorial.h"
 
 int main() {
     // window
@@ -74,6 +43,9 @@ int main() {
         CHECK_VK(vkCreateInstance(&ci, NULL, &instance), "failed to create a Vulkan instance.");
     }
 
+    // debug
+    SET_VULKAN_DEBUG_CALLBACK(instance);
+
     // mainloop
     while (1) {
         if (glfwWindowShouldClose(window))
@@ -82,6 +54,7 @@ int main() {
     }
 
     // termination
+    DESTROY_VULKAN_DEBUG_CALLBACK(instance);
     vkDestroyInstance(instance, NULL);
     glfwTerminate();
 

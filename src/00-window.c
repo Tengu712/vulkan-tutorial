@@ -1,23 +1,4 @@
-#include <stdio.h>
-
-#include <GLFW/glfw3.h>
-
-#define CHECK(p, s) if (!(p)) { fprintf(stderr, "%s\n", (s)); return 1; }
-#define WINDOW_WIDTH 640
-#define WINDOW_HEIGHT 480
-#define WINDOW_TITLE "Vulkan Tutorial"
-
-#ifndef RELEASE_BUILD
-#    define SET_GLFW_ERROR_CALLBACK() glfwSetErrorCallback(glfw_error_callback)
-#else
-#    define SET_GLFW_ERROR_CALLBACK()
-#endif
-
-// A callback function for GLFW
-// NOTE: DX向上のために、GLFWにもコールバック関数を設定しておく。
-void glfw_error_callback(int code, const char* description) {
-    printf("%s : %d\n", description, code);
-}
+#include "common/vulkan-tutorial.h"
 
 int main() {
     // window
@@ -28,7 +9,7 @@ int main() {
         const int res = glfwInit();
         CHECK(res == GLFW_TRUE, "failed to init GLFW.");
         // NOTE: コールバック関数の設定。
-        // NOTE: リリース時には不要なのでマクロで行う。
+        // NOTE: リリース時には不要なのでマクロで行う。詳細はcommon/を参照したい。
         SET_GLFW_ERROR_CALLBACK();
         // NOTE: GLFWで作成したウィンドウをVulkanで用いる場合、GLFW_CLIENT_APIをGLFW_NO_APIにする。
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
