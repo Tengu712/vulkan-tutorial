@@ -2,10 +2,16 @@
 
 #include <GLFW/glfw3.h>
 
-#define CHECK(p, s, r) if ((p)) { fprintf(stderr, "%s\n", (s)); return (r); }
+#define CHECK(p, s) if (!(p)) { fprintf(stderr, "%s\n", (s)); return 1; }
 #define WINDOW_WIDTH 640
 #define WINDOW_HEIGHT 480
 #define WINDOW_TITLE "Vulkan Tutorial"
+
+#ifndef RELEASE_BUILD
+#    define SET_GLFW_ERROR_CALLBACK() glfwSetErrorCallback(glfw_error_callback)
+#else
+#    define SET_GLFW_ERROR_CALLBACK()
+#endif
 
 // A callback function for GLFW
 // NOTE: DX向上のために、GLFWにもコールバック関数を設定しておく。
@@ -20,21 +26,22 @@ int main() {
     {
         // NOTE: GLFWの初期化。
         const int res = glfwInit();
-        CHECK(res != GLFW_TRUE, "failed to init GLFW", res);
+        CHECK(res == GLFW_TRUE, "failed to init GLFW.");
         // NOTE: コールバック関数の設定。
-        glfwSetErrorCallback(glfw_error_callback);
+        // NOTE: リリース時には不要なのでマクロで行う。
+        SET_GLFW_ERROR_CALLBACK();
         // NOTE: GLFWで作成したウィンドウをVulkanで用いる場合、GLFW_CLIENT_APIをGLFW_NO_APIにする。
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
         // NOTE: ウィンドウの作成。
         window = glfwCreateWindow(WINDOW_WIDTH, WINDOW_HEIGHT, WINDOW_TITLE, NULL, NULL);
-        CHECK(window == NULL, "failed to create a window", 1);
+        CHECK(window != NULL, "failed to create a window.");
     }
 
     // mainloop
     // NOTE: ウィンドウを閉じないようにするための無限ループ。
     // NOTE: 現状ではCPUを休止させていないので、ビジーループとなる。
     while (1) {
-        // NOTE: 閉じるボタンが押されるなりSIGINTを受け取るなりしたときにループを抜ける。
+        // NOTE: 終了イベントを検知したときにループを抜ける。
         if (glfwWindowShouldClose(window))
             break;
         // NOTE: ウィンドウイベントの処理。
