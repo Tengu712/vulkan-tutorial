@@ -17,6 +17,7 @@
 #define SCREEN_CLEAR_RGBA { 0.25f, 0.25f, 0.25f, 1.0f }
 #define DEVICE_EXT_NAMES_CNT 1
 #define DEVICE_EXT_NAMES { "VK_KHR_swapchain" }
+#define MAX_SHADER_BIN_SIZE 4096
 
 #ifdef _WIN32
 #    define INST_EXT_NAME_FOR_SURFACE "VK_KHR_win32_surface"
@@ -42,14 +43,16 @@
 #    define INST_LAYER_NAMES { }
 #endif
 
+typedef struct FrameData_t {
+    VkCommandBuffer command_buffer;
+    VkFence fence;
+    VkSemaphore semaphore;
+} FrameData;
+
 #ifndef RELEASE_BUILD
     void set_glfw_error_callback();
     VkResult set_vulkan_debug_callback(const VkInstance instance);
     void destroy_vulkan_debug_callback(const VkInstance instance);
 #endif
 
-typedef struct FrameData_t {
-    VkCommandBuffer command_buffer;
-    VkFence fence;
-    VkSemaphore semaphore;
-} FrameData;
+char *read_bin(const char *path, int *p_size);

@@ -1,4 +1,4 @@
-#include "common/vulkan-tutorial.h"
+#include "../common/vulkan-tutorial.h"
 
 int main() {
     // window
@@ -179,14 +179,14 @@ int main() {
             NULL,
             surface_capabilities.currentTransform,
             // NOTE: ウィンドウマネージャによるウィンドウ同士合成におけるモード。
-            // NOTE: 
+            // NOTE: OPAQUE_BIT_KHRを指定するとアルファ値は無視される。
             VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
             // NOTE: スワップチェインのプレゼンテーションモード。
             // NOTE: FIFO_KHRにすると、プレゼンテーション時に垂直同期を取る。
             VK_PRESENT_MODE_FIFO_KHR,
             // NOTE: レンダリング領域外(ウィンドウが重なっている部分等)のレンダリングを破棄するか否か。TRUEで破棄。
             VK_TRUE,
-            VK_NULL_HANDLE
+            VK_NULL_HANDLE,
         };
         CHECK_VK(vkCreateSwapchainKHR(device, &ci, NULL, &swapchain), "failed to create a swapchain.");
     }
@@ -213,21 +213,15 @@ int main() {
             NULL,
             VK_IMAGE_VIEW_TYPE_2D,
             surface_format.format,
-            // NOTE: 
             {
                 VK_COMPONENT_SWIZZLE_R,
                 VK_COMPONENT_SWIZZLE_G,
                 VK_COMPONENT_SWIZZLE_B,
                 VK_COMPONENT_SWIZZLE_A,
             },
-            // NOTE: 
-            {
-                VK_IMAGE_ASPECT_COLOR_BIT,
-                0,
-                1,
-                0,
-                1,
-            }
+            // NOTE: イメージビューのアスペクトやミップマップやレイヤーを設定できる。
+            // NOTE: アスペクトはカラーのみ。
+            { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 },
         };
         for (int32_t i = 0; i < images_cnt; ++i) {
             ci.image = images[i];
@@ -239,30 +233,31 @@ int main() {
 
     // render pass
     // NOTE: 描画工程の全体像であるレンダーパスを作成する。
+    // NOTE: 余程妙なことをしなければ単純なレンダーパスで十分？
     VkRenderPass render_pass;
     {
-        // NOTE: 
+        // NOTE: アタッチメントの説明。
         const VkAttachmentDescription attachment_descs[] = {
             {
                 0,
                 surface_format.format,
-                VK_SAMPLE_COUNT_1_BIT,
-                VK_ATTACHMENT_LOAD_OP_CLEAR,
-                VK_ATTACHMENT_STORE_OP_STORE,
-                VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-                VK_ATTACHMENT_STORE_OP_DONT_CARE,
-                VK_IMAGE_LAYOUT_UNDEFINED,
-                VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+                VK_SAMPLE_COUNT_1_BIT,            // NOTE: 1ピクセルにつき1サンプル。
+                VK_ATTACHMENT_LOAD_OP_CLEAR,      // NOTE: 色/深度について最初に使われるサブパスの開始時にクリアされる。
+                VK_ATTACHMENT_STORE_OP_STORE,     // NOTE: 色/深度について最後に使われるサブパスの終了時にメモリに書き込まれる。
+                VK_ATTACHMENT_LOAD_OP_DONT_CARE,  // NOTE: ステンシルについて。無視。
+                VK_ATTACHMENT_STORE_OP_DONT_CARE, // NOTE: ステンシルについて。無視。
+                VK_IMAGE_LAYOUT_UNDEFINED,        // NOTE: 最初に使う前に変換するレイアウト。ここでは未定義。
+                VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,  // NOTE: レンダーパス終了時に変換されるレイアウト。ここではプレゼンテーションに使えるレイアウト。
             },
         };
-        // NOTE: 
+        // NOTE: サブパスで用いられるアタッチメントの説明。
         const VkAttachmentReference attachment_refs[] = {
             {
-                0,
-                VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                0, // NOTE: 0番目のアタッチメント。
+                VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, // NOTE: アタッチメントのレイアウト。
             },
         };
-        // NOTE: 
+        // NOTE: サブパスの説明。
         const VkSubpassDescription subpass_descs[] = {
             {
                 0,
@@ -286,7 +281,7 @@ int main() {
             attachment_descs,
             1,
             subpass_descs,
-            // NOTE: 
+            // NOTE: 単純なレンダーパスなのでサブパス依存はなし。
             0,
             NULL,
         };
@@ -357,6 +352,7 @@ int main() {
         if (glfwWindowShouldClose(window))
             break;
         glfwPollEvents();
+
         // prepare
         // NOTE: 使用するイメージを取得する。
         WARN_VK(vkAcquireNextImageKHR(device, swapchain, UINT64_MAX, frame_data[pre_image_idx].semaphore, VK_NULL_HANDLE, &cur_image_idx), "failed to acquire a next image index.");
@@ -365,6 +361,7 @@ int main() {
         // NOTE: イメージに関連付いたフェンスとコマンドバッファをリセットする。
         WARN_VK(vkResetFences(device, 1, &frame_data[cur_image_idx].fence), "failed to reset a fence.");
         WARN_VK(vkResetCommandBuffer(frame_data[cur_image_idx].command_buffer, VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT), "failed to reset a command buffer.");
+
         // begin
         // NOTE: コマンドの記録を開始する。
         const VkCommandBuffer command = frame_data[cur_image_idx].command_buffer;
@@ -376,6 +373,7 @@ int main() {
         };
         WARN_VK(vkBeginCommandBuffer(command, &cmd_bi), "failed to begin to record commands to render.");
         // NOTE: レンダーパスを開始する。
+        // NOTE: 画面のクリア色を指定する。
         const VkClearValue clear_value = {{ SCREEN_CLEAR_RGBA }};
         const VkRenderPassBeginInfo rp_bi = {
             VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
@@ -387,6 +385,7 @@ int main() {
             &clear_value,
         };
         vkCmdBeginRenderPass(command, &rp_bi, VK_SUBPASS_CONTENTS_INLINE);
+
         // end
         // NOTE: レンダーパス及びコマンド記録を終了する。
         vkCmdEndRenderPass(command);
@@ -420,6 +419,7 @@ int main() {
         // NOTE: ここで垂直同期が取られる。
         WARN_VK(vkQueuePresentKHR(queue, &pi), "failed to enqueue present command.");
         WARN_VK(res, "failed to present.");
+
         // finish
         pre_image_idx = cur_image_idx;
     }
