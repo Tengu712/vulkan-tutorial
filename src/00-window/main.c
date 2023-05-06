@@ -13,6 +13,8 @@ int main() {
         SET_GLFW_ERROR_CALLBACK();
         // NOTE: GLFWで作成したウィンドウをVulkanで用いる場合、GLFW_CLIENT_APIをGLFW_NO_APIにする。
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+        // NOTE: 簡単化のためにウィンドウのリサイズを禁止する。
+        glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
         // NOTE: ウィンドウの作成。
         window = glfwCreateWindow(WINDOW_WIDTH, WINDOW_HEIGHT, WINDOW_TITLE, NULL, NULL);
         CHECK(window != NULL, "failed to create a window.");

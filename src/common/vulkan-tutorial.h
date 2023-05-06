@@ -22,7 +22,7 @@
 #ifdef _WIN32
 #    define INST_EXT_NAME_FOR_SURFACE "VK_KHR_win32_surface"
 #elif __linux__
-#    define INST_EXT_NAME_FOR_SURFACE "VK_KHR_xlib_surface"
+#    define INST_EXT_NAME_FOR_SURFACE "VK_KHR_xcb_surface"
 #endif
 
 #ifndef RELEASE_BUILD
@@ -56,3 +56,15 @@ typedef struct FrameData_t {
 #endif
 
 char *read_bin(const char *path, int *p_size);
+
+int32_t get_memory_type_index(const VkPhysicalDeviceMemoryProperties* mem_prop, VkMemoryRequirements reqs, VkMemoryPropertyFlags flags);
+VkResult create_buffer(
+    const VkDevice device,
+    const VkPhysicalDeviceMemoryProperties* mem_prop,
+    VkDeviceSize size,
+    VkBufferUsageFlags usage,
+    VkMemoryPropertyFlags flags,
+    VkBuffer *p_buffer,
+    VkDeviceMemory *p_device_memory
+);
+VkResult map_memory(const VkDevice device, const VkDeviceMemory device_memory, const void *data, int32_t size);

@@ -8,6 +8,7 @@ int main() {
         CHECK(res == GLFW_TRUE, "failed to init GLFW.");
         SET_GLFW_ERROR_CALLBACK();
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+        glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
         window = glfwCreateWindow(WINDOW_WIDTH, WINDOW_HEIGHT, WINDOW_TITLE, NULL, NULL);
         CHECK(window != NULL, "failed to create a window.");
     }
@@ -346,6 +347,7 @@ int main() {
 
     // mainloop
     // TODO: 三つ以上のイメージにも対応する。
+    // TODO: フェンスとセマフォの説明を追加する。
     uint32_t pre_image_idx = 0;
     uint32_t cur_image_idx = 0;
     while (1) {

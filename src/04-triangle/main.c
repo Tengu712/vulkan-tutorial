@@ -8,6 +8,7 @@ int main() {
         CHECK(res == GLFW_TRUE, "failed to init GLFW.");
         SET_GLFW_ERROR_CALLBACK();
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+        glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
         window = glfwCreateWindow(WINDOW_WIDTH, WINDOW_HEIGHT, WINDOW_TITLE, NULL, NULL);
         CHECK(window != NULL, "failed to create a window.");
     }
@@ -308,30 +309,288 @@ int main() {
         int bin_vert_size;
         char *bin_vert = read_bin("./shader.vert.spv", &bin_vert_size);
         CHECK(bin_vert != NULL, "failed to read shader.vert.spv.");
-        const VkShaderModuleCreateInfo ci_vert = {
+        const VkShaderModuleCreateInfo vert_ci = {
             VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
             NULL,
             0,
             bin_vert_size,
             (const uint32_t*)bin_vert,
         };
-        CHECK_VK(vkCreateShaderModule(device, &ci_vert, NULL, &vert_shader), "failed to create a vertex shader module.");
+        CHECK_VK(vkCreateShaderModule(device, &vert_ci, NULL, &vert_shader), "failed to create a vertex shader module.");
         // fragment shader
         // NOTE: フラグメントシェーダモジュールを作成する。
         int bin_frag_size;
         char *bin_frag = read_bin("./shader.frag.spv", &bin_frag_size);
         CHECK(bin_frag != NULL, "failed to read shader.frag.spv.");
-        const VkShaderModuleCreateInfo ci_frag = {
+        const VkShaderModuleCreateInfo frag_ci = {
             VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
             NULL,
             0,
             bin_frag_size,
             (const uint32_t*)bin_frag,
         };
-        CHECK_VK(vkCreateShaderModule(device, &ci_frag, NULL, &frag_shader), "failed to create a fragment shader module.");
+        CHECK_VK(vkCreateShaderModule(device, &frag_ci, NULL, &frag_shader), "failed to create a fragment shader module.");
         // NOTE: バイナリ配列は不要なので解放する。
         free(bin_vert);
         free(bin_frag);
+    }
+
+    // pipeline layout
+    // NOTE: パイプラインのレイアウトを作る。なぜかこれもオブジェクト。
+    VkPipelineLayout pipeline_layout;
+    {
+        // NOTE: ここでプッシュコンスタントやディスクリプタをまとめる。
+        // NOTE: 04-triangleでは使わないのでなし。
+        const VkPipelineLayoutCreateInfo ci = {
+            VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+            NULL,
+            0,
+            0,
+            NULL,
+            0,
+            NULL,
+        };
+        CHECK_VK(vkCreatePipelineLayout(device, &ci, NULL, &pipeline_layout), "failed to create a pipeline layout.");
+    }
+
+    // pipeline
+    VkPipeline pipeline;
+    {
+        // shaders
+        // NOTE: パイプラインで用いるシェーダをまとめる。
+        const VkPipelineShaderStageCreateInfo shader_cis[2] = {
+            {
+                VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+                NULL,
+                0,
+                VK_SHADER_STAGE_VERTEX_BIT,
+                vert_shader,
+                "main",
+                NULL,
+            },
+            {
+                VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+                NULL,
+                0,
+                VK_SHADER_STAGE_FRAGMENT_BIT,
+                frag_shader,
+                "main",
+                NULL,
+            },
+        };
+
+        // vertex input
+        // TODO: バインディングって何？
+        // NOTE: 頂点情報のデータサイズの説明。
+        // NOTE: 04-triangleではxyzローカル座標しかないので、バインディング数が一つで、サイズはfloat*3。
+        const VkVertexInputBindingDescription vert_inp_binding_dcs[] = {
+            // TODO: 3つ目の説明を追加する。
+            // NOTE: バインディング番号、サイズ、
+            { 0, sizeof(float) * 3, VK_VERTEX_INPUT_RATE_VERTEX },
+        };
+        // NOTE: 頂点情報の構造の説明。
+        // NOTE: バインディングが複数あってもフラットな配列にする。
+        const VkVertexInputAttributeDescription vert_inp_attr_dcs[] = {
+            // NOTE: バインディング内のロケーション番号、バインディング番号、形式、オフセット。
+            // NOTE: ロケーション番号は、GLSL内の指定に一致させる。
+            { 0, 0, VK_FORMAT_R32G32B32_SFLOAT, 0 },
+        };
+        // NOTE: 頂点情報の説明をまとめる。
+        const VkPipelineVertexInputStateCreateInfo vert_inp_ci = {
+            VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+            NULL,
+            0,
+            1,
+            vert_inp_binding_dcs,
+            1,
+            vert_inp_attr_dcs,
+        };
+
+        // input assembly
+        // NOTE: インプットアセンブリについて。
+        const VkPipelineInputAssemblyStateCreateInfo inp_as_ci = {
+            VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+            NULL,
+            0,
+            // NOTE: ポリゴンを作る際の頂点の結び方。今回はトライアングルリスト。
+            // NOTE: 他にTRIANGLE_STRIPやTRIANGLE_FANやがある。
+            VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+            VK_FALSE,
+        };
+
+        // viewport
+        // TODO: 詳しく説明する。
+        // NOTE: ビューポートとシザーについて。
+        const VkViewport viewports[] = {
+            {
+                0.0f,
+                0.0f,
+                surface_capabilities.currentExtent.width,
+                surface_capabilities.currentExtent.height,
+                0.0f,
+                1.0f,
+            },
+        };
+        const VkRect2D scissors[] = {
+            { {0, 0}, surface_capabilities.currentExtent },
+        };
+        const VkPipelineViewportStateCreateInfo viewport_ci = {
+            VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
+            NULL,
+            0,
+            1,
+            viewports,
+            1,
+            scissors,
+        };
+
+        // rasterization
+        // TODO: 他のメンバも説明する。
+        // NOTE: ラスタライゼーションの設定。カリングを設定できる。
+        const VkPipelineRasterizationStateCreateInfo raster_ci = {
+            VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
+            NULL,
+            0,
+            VK_FALSE,
+            VK_FALSE,
+            // NOTE: ポリゴンを塗り尽くすのか、枠線だけ塗るのか、頂点だけ塗るのかを設定できる。
+            VK_POLYGON_MODE_FILL,
+            // NOTE: カリングを行うか設定できる。2Dゲームなら無、3Dゲームなら有がいいかも？
+            // NOTE: BACK_BITを指定すると「裏」を向いているポリゴンを破棄する。
+            VK_CULL_MODE_BACK_BIT,
+            // NOTE: OpenGL系では普通、頂点を反時計回りに結ぶと「表」と判断される。
+            // NOTE: VK_FRONT_FACE_CLOCKWISEを設定すると、時計回りで「表」に変えられる。
+            VK_FRONT_FACE_COUNTER_CLOCKWISE,
+            VK_FALSE,
+            0.0f,
+            0.0f,
+            0.0f,
+            1.0f,
+        };
+
+        // multisample
+        // TODO: なにこれ。
+        // NOTE: マルチサンプルについて。
+        const VkPipelineMultisampleStateCreateInfo multisample_ci = {
+            VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+            NULL,
+            0,
+            VK_SAMPLE_COUNT_1_BIT,
+            VK_FALSE,
+            0.0f,
+            NULL,
+            VK_FALSE,
+            VK_FALSE,
+        };
+
+        // color blend
+        // NOTE: 色の合成についての設定。透過合成やオーバーレイなどを設定できる。
+        // NOTE: 今回は一つのみで、透過合成。色もアルファ値も上に重なる物基準で足して1になるようにする。
+        const VkPipelineColorBlendAttachmentState color_blend_states[] = {
+            {
+                VK_TRUE,
+                VK_BLEND_FACTOR_SRC_ALPHA,
+                VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+                VK_BLEND_OP_ADD,
+                VK_BLEND_FACTOR_SRC_ALPHA,
+                VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+                VK_BLEND_OP_ADD,
+                VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
+            }
+        };
+        const VkPipelineColorBlendStateCreateInfo color_blend_ci = {
+            VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
+            NULL,
+            0,
+            VK_FALSE,
+            (VkLogicOp)0,
+            1,
+            color_blend_states,
+            {0.0f, 0.0f, 0.0f, 0.0f},
+        };
+
+        // pipeline
+        // TODO: 派生について説明する。
+        // NOTE: パイプラインを作る。
+        // NOTE: パイプラインは「派生」できるらしい。今回は一つのみで、派生しない。
+        const VkGraphicsPipelineCreateInfo cis[] = {
+            {
+                VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+                NULL,
+                0,
+                2,
+                shader_cis,
+                &vert_inp_ci,
+                &inp_as_ci,
+                NULL, // NOTE: テッセレーションのためのメンバ。
+                &viewport_ci,
+                &raster_ci,
+                &multisample_ci,
+                NULL, // NOTE: デプス/ステンシルのためのメンバ。
+                &color_blend_ci,
+                NULL, // TODO: dynamic stateについて詳しく知らない。
+                pipeline_layout,
+                render_pass,
+                0, // NOTE: このパイプラインを用いるサブパスの番号。
+                NULL, // NOTE: 派生元のパイプライン。
+                0,    // NOTE: 派生元のパイプラインのcreate infoのインデックス。
+            },
+        };
+        CHECK_VK(vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, cis, NULL, &pipeline), "failed to create a pipeline.");
+    }
+
+    // model
+    struct Model {
+        uint32_t index_cnt;
+        VkBuffer vtx_buffer;
+        VkBuffer idx_buffer;
+        VkDeviceMemory vtx_memory;
+        VkDeviceMemory idx_memory;
+    } model;
+    {
+        // NOTE: Vulkanのクリッピング座標系は、
+        // NOTE:   * x: [-1, 1] left to right
+        // NOTE:   * y: [-1, 1] up to down
+        // NOTE:   * z: [0, 1] far to near (遠近は頂点座標のwで調整するので、方向はどうでもいい)
+        // NOTE: であるため、上向きの三角形の頂点座標は以下のようになる。
+        const float vtxs[3][3] = {
+            { -0.5f,  0.5f, 0.0f }, // NOTE: 左下。
+            {  0.5f,  0.5f, 0.0f }, // NOTE: 右下。
+            {  0.0f, -0.5f, 0.0f }, // NOTE: 中上。
+        };
+        // NOTE: カリングを考慮して反時計回りに結ぶ。
+        const uint32_t idxs[3] = { 0, 1, 2 };
+        const size_t vtxs_size = sizeof(float) * 3 * 3;
+        const size_t idxs_size = sizeof(uint32_t) * 3;
+        model.index_cnt = 3;
+        // NOTE: 各バッファを作る。
+        CHECK_VK(
+            create_buffer(
+                device,
+                &phys_device_memory_prop,
+                vtxs_size,
+                VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+                VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
+                &model.vtx_buffer,
+                &model.vtx_memory
+            ),
+            "failed to create a vertex buffer for a model."
+        );
+        CHECK_VK(
+            create_buffer(
+                device,
+                &phys_device_memory_prop,
+                idxs_size,
+                VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+                VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
+                &model.idx_buffer,
+                &model.idx_memory
+            ),
+            "failed to create a index buffer for a model."
+        );
+        // NOTE: 各バッファにマップする。
+        CHECK_VK(map_memory(device, model.vtx_memory, (void *)vtxs, vtxs_size), "failed to map vertex buffer data for a model.");
+        CHECK_VK(map_memory(device, model.idx_memory, (void *)idxs, idxs_size), "failed to map index buffer data for a model.");
     }
 
     // mainloop
@@ -368,6 +627,17 @@ int main() {
             &clear_value,
         };
         vkCmdBeginRenderPass(command, &rp_bi, VK_SUBPASS_CONTENTS_INLINE);
+        // NOTE: パイプラインを関連付ける。
+        vkCmdBindPipeline(command, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+
+        // draw
+        // NOTE: モデルを関連付ける。
+        // NOTE: 残念ながらコマンドバッファごとに関連付けるので、一つしかモデルがなくとも、毎フレーム行う。
+        const VkDeviceSize offset = 0;
+        vkCmdBindVertexBuffers(command, 0, 1, &model.vtx_buffer, &offset);
+        vkCmdBindIndexBuffer(command, model.idx_buffer, offset, VK_INDEX_TYPE_UINT32);
+        // NOTE: ドローコール。
+        vkCmdDrawIndexed(command, model.index_cnt, 1, 0, 0, 0);
 
         // end
         vkCmdEndRenderPass(command);
@@ -405,6 +675,12 @@ int main() {
 
     // termination
     vkDeviceWaitIdle(device);
+    vkFreeMemory(device, model.vtx_memory, NULL);
+    vkFreeMemory(device, model.idx_memory, NULL);
+    vkDestroyBuffer(device, model.vtx_buffer, NULL);
+    vkDestroyBuffer(device, model.idx_buffer, NULL);
+    vkDestroyPipeline(device, pipeline, NULL);
+    vkDestroyPipelineLayout(device, pipeline_layout, NULL);
     vkDestroyShaderModule(device, frag_shader, NULL);
     vkDestroyShaderModule(device, vert_shader, NULL);
     for (uint32_t i = 0; i < image_views_cnt; ++i) {
