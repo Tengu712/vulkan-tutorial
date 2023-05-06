@@ -17,7 +17,7 @@
 #define SCREEN_CLEAR_RGBA { 0.25f, 0.25f, 0.25f, 1.0f }
 #define DEVICE_EXT_NAMES_CNT 1
 #define DEVICE_EXT_NAMES { "VK_KHR_swapchain" }
-#define MAX_SHADER_BIN_SIZE 4096
+#define MAX_SHADER_BIN_SIZE 8192
 
 #ifdef _WIN32
 #    define INST_EXT_NAME_FOR_SURFACE "VK_KHR_win32_surface"
@@ -49,6 +49,14 @@ typedef struct FrameData_t {
     VkSemaphore semaphore;
 } FrameData;
 
+typedef struct Model_t {
+    uint32_t index_cnt;
+    VkBuffer vtx_buffer;
+    VkBuffer idx_buffer;
+    VkDeviceMemory vtx_memory;
+    VkDeviceMemory idx_memory;
+} Model;
+
 #ifndef RELEASE_BUILD
     void set_glfw_error_callback();
     VkResult set_vulkan_debug_callback(const VkInstance instance);
@@ -57,10 +65,10 @@ typedef struct FrameData_t {
 
 char *read_bin(const char *path, int *p_size);
 
-int32_t get_memory_type_index(const VkPhysicalDeviceMemoryProperties* mem_prop, VkMemoryRequirements reqs, VkMemoryPropertyFlags flags);
+int32_t get_memory_type_index(const VkPhysicalDeviceMemoryProperties *mem_prop, VkMemoryRequirements reqs, VkMemoryPropertyFlags flags);
 VkResult create_buffer(
     const VkDevice device,
-    const VkPhysicalDeviceMemoryProperties* mem_prop,
+    const VkPhysicalDeviceMemoryProperties *mem_prop,
     VkDeviceSize size,
     VkBufferUsageFlags usage,
     VkMemoryPropertyFlags flags,
@@ -68,3 +76,12 @@ VkResult create_buffer(
     VkDeviceMemory *p_device_memory
 );
 VkResult map_memory(const VkDevice device, const VkDeviceMemory device_memory, const void *data, int32_t size);
+VkResult create_model(
+    const VkDevice device,
+    const VkPhysicalDeviceMemoryProperties *mem_prop,
+    uint32_t index_cnt,
+    size_t vtxs_size,
+    const float *vtxs,
+    const uint32_t *idxs,
+    Model *out
+);

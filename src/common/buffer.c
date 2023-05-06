@@ -4,7 +4,7 @@
 
 #define CHECK_RETURN(p) res = (p); if (res != VK_SUCCESS) return res;
 
-int32_t get_memory_type_index(const VkPhysicalDeviceMemoryProperties* mem_prop, VkMemoryRequirements reqs, VkMemoryPropertyFlags flags) {
+int32_t get_memory_type_index(const VkPhysicalDeviceMemoryProperties *mem_prop, VkMemoryRequirements reqs, VkMemoryPropertyFlags flags) {
     for (int32_t i = 0; i < mem_prop->memoryTypeCount; ++i) {
         if ((reqs.memoryTypeBits & (1 << i)) && (mem_prop->memoryTypes[i].propertyFlags & flags)) {
             return i;
@@ -15,7 +15,7 @@ int32_t get_memory_type_index(const VkPhysicalDeviceMemoryProperties* mem_prop, 
 
 VkResult create_buffer(
     const VkDevice device,
-    const VkPhysicalDeviceMemoryProperties* mem_prop,
+    const VkPhysicalDeviceMemoryProperties *mem_prop,
     VkDeviceSize size,
     VkBufferUsageFlags usage,
     VkMemoryPropertyFlags flags,
@@ -63,4 +63,42 @@ VkResult map_memory(const VkDevice device, const VkDeviceMemory device_memory, c
     memcpy(p, data, size);
     vkUnmapMemory(device, device_memory);
     return VK_SUCCESS;
+}
+
+VkResult create_model(
+    const VkDevice device,
+    const VkPhysicalDeviceMemoryProperties *mem_prop,
+    uint32_t index_cnt,
+    size_t vtxs_size,
+    const float *vtxs,
+    const uint32_t *idxs,
+    Model *out
+) {
+    VkResult res;
+    out->index_cnt = index_cnt;
+    const size_t idxs_size = sizeof(uint32_t) * index_cnt;
+    CHECK_RETURN(
+        create_buffer(
+            device,
+            mem_prop,
+            vtxs_size,
+            VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
+            &out->vtx_buffer,
+            &out->vtx_memory
+        )
+    );
+    CHECK_RETURN(
+        create_buffer(
+            device,
+            mem_prop,
+            idxs_size,
+            VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
+            &out->idx_buffer,
+            &out->idx_memory
+        )
+    );
+    CHECK_RETURN(map_memory(device, out->vtx_memory, (void *)vtxs, vtxs_size));
+    CHECK_RETURN(map_memory(device, out->idx_memory, (void *)idxs, idxs_size));
 }

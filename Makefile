@@ -1,4 +1,4 @@
-.PHONY: 00 01 02 03 04 clean
+.PHONY: 00 01 02 03 04 05 clean
 
 out=./build/a.out
 opt=-lglfw3 -lvulkan -lm
@@ -22,5 +22,9 @@ endif
 	glslc -o ./build/shader.vert.spv ./src/04-triangle/shader.vert
 	glslc -o ./build/shader.frag.spv ./src/04-triangle/shader.frag
 	gcc -o $(out) ./src/04-triangle/main.c ./src/common/debug.c ./src/common/read_bin.c ./src/common/buffer.c $(opt)
+05:
+	glslc -o ./build/shader.vert.spv ./src/05-affine-transform/shader.vert
+	glslc -o ./build/shader.frag.spv ./src/05-affine-transform/shader.frag
+	gcc -o $(out) ./src/05-affine-transform/main.c ./src/common/debug.c ./src/common/read_bin.c ./src/common/buffer.c $(opt)
 clean:
 	$(cln)
