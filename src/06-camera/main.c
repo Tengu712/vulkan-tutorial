@@ -1,8 +1,6 @@
 #include "../common/vulkan-tutorial.h"
 
 // A struct for organizing the layout of push constant data.
-// NOTE: プッシュコンスタントの構造。
-// NOTE: のちのち変更されるため、vulkan-tutorial.hではなくここで定義しておく。
 typedef struct PushConstant_t {
     float scl[4];
     float rot[4];
@@ -341,6 +339,62 @@ int main() {
         free(bin_frag);
     }
 
+    // descriptor sets
+    // NOTE: ディスクリプタセッツを作る。
+    // NOTE: プッシュコンスタントとは違い、予めメモリを確保し、シェーダで使うデータをそこへ格納しておく。
+    // NOTE: つまり、一フレーム中にユニフォームバッファやサンプラーの値を変えたい場合は、その分だけディスクリプタセットを作る必要がある。
+    // NOTE: 今回は、描画対象が二つと確定しており、必要なディスクリプタセットが二つと確定しているため、二つ作る。
+    VkDescriptorSetLayout descriptor_set_layout;
+    VkDescriptorPool descriptor_pool;
+    VkDescriptorSet descriptor_sets[2];
+    {
+        // descriptor layout
+        // NOTE: どの種類が何個あるか指定する。
+        const VkDescriptorSetLayoutBinding desc_set_layout_binds[] = {
+            {
+                0, // NOTE: バインディング番号。
+                VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                1,
+                VK_SHADER_STAGE_VERTEX_BIT,
+                NULL,
+            },
+        };
+        const VkDescriptorSetLayoutCreateInfo desc_set_layout_ci = {
+            VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+            NULL,
+            0,
+            1,
+            desc_set_layout_binds,
+        };
+        CHECK_VK(vkCreateDescriptorSetLayout(device, &desc_set_layout_ci, NULL, &descriptor_set_layout), "failed to create a descriptor set layout.");
+        // descriptor pool
+        const VkDescriptorPoolSize desc_pool_sizes[] = {
+            {
+                VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                2,
+            },
+        };
+        const VkDescriptorPoolCreateInfo desc_pool_ci = {
+            VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+            NULL,
+            0,
+            2,
+            1,
+            desc_pool_sizes,
+        };
+        CHECK_VK(vkCreateDescriptorPool(device, &desc_pool_ci, NULL, &descriptor_pool), "failed to create a descriptor pool.");
+        for (uint32_t i = 0; i < 2; ++i) {
+            const VkDescriptorSetAllocateInfo ai = {
+                VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+                NULL,
+                descriptor_pool,
+                1,
+                &descriptor_set_layout,
+            };
+            CHECK_VK(vkAllocateDescriptorSets(device, &ai, &descriptor_sets[i]), "failed to allocate a descriptor set.");
+        }
+    }
+
     // pipeline
     VkPipelineLayout pipeline_layout;
     VkPipeline pipeline;
@@ -567,17 +621,24 @@ int main() {
     // mainloop
     uint32_t pre_image_idx = 0;
     uint32_t cur_image_idx = 0;
-    // NOTE: 二つのモデル(正確には二回の描画)のためのプッシュコンスタントをここで定義しておく。
+    // NOTE: 視錘台にアスペクト比が反映されているおかげで、1:1のポリゴンが正方形として描かれる。
+    // NOTE: その一方、視錘台の原点からの距離とポリゴンの大きさ(および拡大率)に注意しなければならない。
+    // NOTE: 今回は視野角90度、アスペクト比4:3の視錘台であるため、z=500の位置では次の範囲が正規範囲に収まる：
+    // NOTE:   * x: [-500, 500]
+    // NOTE:   * y: [-375, 375]
+    // NOTE: 例えば、右下の頂点のローカル座標がx=y=0.5であるため、z=500の位置でx方向に1000倍、y方向に750倍すると、
+    // NOTE: クリッピング座標系においてx=1,y=1に位置する。
+    // NOTE: 逆に、z=320の位置では、ローカル座標系において1x1である正方形は640x480のキャンバスにおける1ピクセルのように扱える。
     PushConstant push_constants[2] = {
         {
-            { 0.5, 0.5, 1.0, 0.0 }, // NOTE: x,y方向に0.5倍
+            { 160.0, 160.0, 1.0, 0.0 },
             { 0.0, 0.0, 0.0, 0.0 },
-            { -0.5, -0.5, 0.5, 0.0 }, // NOTE: x,y方向に-0.5、z方向に0.5移動
+            { -160.0, -120.0, 320.0, 0.0 },
         },
         {
-            { 0.5, 0.5, 1.0, 0.0 }, // NOTE: x,y方向に0.5倍
+            { 160.0, 160.0, 1.0, 0.0 },
             { 0.0, 0.0, 0.0, 0.0 },
-            { 0.25, 0.25, 0.5, 0.0 }, // NOTE: x,y方向に0.25、z方向に0.5移動
+            { 80.0, 60.0, 320.0, 0.0 },
         },
     };
     while (1) {
@@ -585,9 +646,7 @@ int main() {
             break;
         glfwPollEvents();
 
-        // NOTE: 毎フレームZ軸回りに0.01ラジアン回転する。
         push_constants[0].rot[2] += 0.01f;
-        // NOTE: 毎フレームX軸Y軸回りに0.01ラジアン回転する。
         push_constants[1].rot[0] += 0.01f;
         push_constants[1].rot[1] += 0.01f;
 
@@ -620,7 +679,6 @@ int main() {
         vkCmdBindPipeline(command, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
 
         // draw
-        // NOTE: 二つのモデルを描画する。
         for (int i = 0; i < 2; ++i) {
             const VkDeviceSize offset = 0;
             vkCmdBindVertexBuffers(command, 0, 1, &models[i].vtx_buffer, &offset);
@@ -673,6 +731,8 @@ int main() {
     }
     vkDestroyPipeline(device, pipeline, NULL);
     vkDestroyPipelineLayout(device, pipeline_layout, NULL);
+    vkDestroyDescriptorPool(device, descriptor_pool, NULL);
+    vkDestroyDescriptorSetLayout(device, descriptor_set_layout, NULL);
     vkDestroyShaderModule(device, frag_shader, NULL);
     vkDestroyShaderModule(device, vert_shader, NULL);
     for (uint32_t i = 0; i < image_views_cnt; ++i) {

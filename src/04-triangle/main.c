@@ -335,13 +335,14 @@ int main() {
         free(bin_frag);
     }
 
-    // pipeline layout
-    // NOTE: パイプラインのレイアウトを作る。なぜかこれもオブジェクト。
+    // pipeline
+    // NOTE: パイプラインを作る。
     VkPipelineLayout pipeline_layout;
+    VkPipeline pipeline;
     {
         // NOTE: ここでプッシュコンスタントやディスクリプタをまとめる。
         // NOTE: 04-triangleでは使わないのでなし。
-        const VkPipelineLayoutCreateInfo ci = {
+        const VkPipelineLayoutCreateInfo pipeline_layout_ci = {
             VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
             NULL,
             0,
@@ -350,12 +351,8 @@ int main() {
             0,
             NULL,
         };
-        CHECK_VK(vkCreatePipelineLayout(device, &ci, NULL, &pipeline_layout), "failed to create a pipeline layout.");
-    }
+        CHECK_VK(vkCreatePipelineLayout(device, &pipeline_layout_ci, NULL, &pipeline_layout), "failed to create a pipeline layout.");
 
-    // pipeline
-    VkPipeline pipeline;
-    {
         // shaders
         // NOTE: パイプラインで用いるシェーダをまとめる。
         const VkPipelineShaderStageCreateInfo shader_cis[2] = {

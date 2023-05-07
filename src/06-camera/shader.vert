@@ -4,7 +4,15 @@ layout(push_constant) uniform PushConstant {
     vec4 scl;
     vec4 rot;
     vec4 trs;
+    vec4 view_pos;
+    vec4 view_rot;
+    vec4 proj_param;
 } constant;
+
+layout(binding = 0) uniform Camera {
+    mat4 view;
+    mat4 proj;
+};
 
 layout(location=0) in vec3 in_pos;
 
@@ -59,6 +67,17 @@ mat4 my_translate(vec3 v) {
     );
 }
 
+mat4 my_persepective(float pov, float aspect, float near, float far) {
+    float div_tanpov = 1.0 / tan(pov);
+    float div_depth = 1.0 / (far - near);
+    return mat4(
+        div_tanpov, 0.0, 0.0, 0.0,
+        0.0, aspect * div_tanpov, 0.0, 0.0,
+        0.0, 0.0, (far + near) * div_depth, 1.0,
+        0.0, 0.0, 2.0 * far * near * div_depth, 0.0
+    );
+}
+
 void main() {
     vec4 pos = vec4(in_pos, 1.0);
     pos = my_scale(constant.scl.xyz) * pos;
@@ -66,5 +85,10 @@ void main() {
     pos = my_rotate_y(constant.rot.y) * pos;
     pos = my_rotate_z(constant.rot.z) * pos;
     pos = my_translate(constant.trs.xyz) * pos;
+    //pos = my_rotate_x(-1.0 * constant.view_rot.x) * pos;
+    //pos = my_rotate_y(-1.0 * constant.view_rot.y) * pos;
+    //pos = my_rotate_z(-1.0 * constant.view_rot.z) * pos;
+    //pos = my_translate(-1.0 * (constant.view_pos.xyz)) * pos;
+    pos = my_persepective(3.1415 / 4.0, 640.0 / 480.0, 0.0, 1000.0) * pos;
     gl_Position = pos;
 }
