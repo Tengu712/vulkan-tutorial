@@ -56,10 +56,8 @@ typedef struct Buffer_t {
 
 typedef struct Model_t {
     uint32_t index_cnt;
-    VkBuffer vtx_buffer;
-    VkBuffer idx_buffer;
-    VkDeviceMemory vtx_memory;
-    VkDeviceMemory idx_memory;
+    Buffer vertex;
+    Buffer index;
 } Model;
 
 typedef struct CameraData_t {
@@ -82,8 +80,7 @@ VkResult create_buffer(
     VkDeviceSize size,
     VkBufferUsageFlags usage,
     VkMemoryPropertyFlags flags,
-    VkBuffer *p_buffer,
-    VkDeviceMemory *p_device_memory
+    Buffer *out
 );
 VkResult map_memory(const VkDevice device, const VkDeviceMemory device_memory, const void *data, int32_t size);
 VkResult create_model(

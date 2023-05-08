@@ -19,8 +19,7 @@ VkResult create_buffer(
     VkDeviceSize size,
     VkBufferUsageFlags usage,
     VkMemoryPropertyFlags flags,
-    VkBuffer *p_buffer,
-    VkDeviceMemory *p_device_memory
+    Buffer *out
 ) {
     VkResult res;
 
@@ -34,11 +33,11 @@ VkResult create_buffer(
         VK_SHARING_MODE_EXCLUSIVE,
         0,
     };
-    CHECK_RETURN(vkCreateBuffer(device, &buffer_create_info, NULL, p_buffer));
+    CHECK_RETURN(vkCreateBuffer(device, &buffer_create_info, NULL, &out->buffer));
 
     // get memory requirements
     VkMemoryRequirements reqs;
-    vkGetBufferMemoryRequirements(device, *p_buffer, &reqs);
+    vkGetBufferMemoryRequirements(device, out->buffer, &reqs);
 
     // allocate memory
     VkMemoryAllocateInfo allocate_info = {
@@ -48,10 +47,10 @@ VkResult create_buffer(
         0,
     };
     allocate_info.memoryTypeIndex = get_memory_type_index(mem_prop, reqs, flags);
-    CHECK_RETURN(vkAllocateMemory(device, &allocate_info, NULL, p_device_memory));
+    CHECK_RETURN(vkAllocateMemory(device, &allocate_info, NULL, &out->memory));
 
     // bind buffer with memory
-    CHECK_RETURN(vkBindBufferMemory(device, *p_buffer, *p_device_memory, 0));
+    CHECK_RETURN(vkBindBufferMemory(device, out->buffer, out->memory, 0));
 
     return VK_SUCCESS;
 }
@@ -84,8 +83,7 @@ VkResult create_model(
             vtxs_size,
             VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
             VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
-            &out->vtx_buffer,
-            &out->vtx_memory
+            &out->vertex
         )
     );
     CHECK_RETURN(
@@ -95,10 +93,9 @@ VkResult create_model(
             idxs_size,
             VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
             VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
-            &out->idx_buffer,
-            &out->idx_memory
+            &out->index
         )
     );
-    CHECK_RETURN(map_memory(device, out->vtx_memory, (void *)vtxs, vtxs_size));
-    CHECK_RETURN(map_memory(device, out->idx_memory, (void *)idxs, idxs_size));
+    CHECK_RETURN(map_memory(device, out->vertex.memory, (void *)vtxs, vtxs_size));
+    CHECK_RETURN(map_memory(device, out->index.memory, (void *)idxs, idxs_size));
 }

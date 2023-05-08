@@ -623,8 +623,8 @@ int main() {
         // NOTE: 二つのモデルを描画する。
         for (int i = 0; i < 2; ++i) {
             const VkDeviceSize offset = 0;
-            vkCmdBindVertexBuffers(command, 0, 1, &models[i].vtx_buffer, &offset);
-            vkCmdBindIndexBuffer(command, models[i].idx_buffer, offset, VK_INDEX_TYPE_UINT32);
+            vkCmdBindVertexBuffers(command, 0, 1, &models[i].vertex.buffer, &offset);
+            vkCmdBindIndexBuffer(command, models[i].index.buffer, offset, VK_INDEX_TYPE_UINT32);
             vkCmdPushConstants(command, pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PushConstant), (const void *)&push_constants[i]);
             vkCmdDrawIndexed(command, models[i].index_cnt, 1, 0, 0, 0);
         }
@@ -666,10 +666,10 @@ int main() {
     // termination
     vkDeviceWaitIdle(device);
     for (int i = 0; i < 2; ++i) {
-        vkFreeMemory(device, models[i].vtx_memory, NULL);
-        vkFreeMemory(device, models[i].idx_memory, NULL);
-        vkDestroyBuffer(device, models[i].vtx_buffer, NULL);
-        vkDestroyBuffer(device, models[i].idx_buffer, NULL);
+        vkFreeMemory(device, models[i].vertex.memory, NULL);
+        vkFreeMemory(device, models[i].index.memory, NULL);
+        vkDestroyBuffer(device, models[i].vertex.buffer, NULL);
+        vkDestroyBuffer(device, models[i].index.buffer, NULL);
     }
     vkDestroyPipeline(device, pipeline, NULL);
     vkDestroyPipelineLayout(device, pipeline_layout, NULL);

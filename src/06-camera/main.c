@@ -631,8 +631,7 @@ int main() {
                     sizeof(CameraData),
                     VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
                     VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                    &uniform_buffers[i].buffer,
-                    &uniform_buffers[i].memory
+                    &uniform_buffers[i]
                 ),
                 "failed to create a uniform buffer."
             );
@@ -725,8 +724,10 @@ int main() {
 
         push_constants[0].rot[0] += 0.01f;
         push_constants[0].rot[1] += 0.01f;
+        push_constants[0].rot[2] += 0.01f;
         push_constants[1].rot[0] += 0.01f;
         push_constants[1].rot[1] += 0.01f;
+        push_constants[1].rot[2] += 0.01f;
 
         // prepare
         WARN_VK(vkAcquireNextImageKHR(device, swapchain, UINT64_MAX, frame_data[pre_image_idx].semaphore, VK_NULL_HANDLE, &cur_image_idx), "failed to acquire a next image index.");
@@ -759,8 +760,8 @@ int main() {
         // draw
         // NOTE: 今回モデルは一種類しか使わない。
         const VkDeviceSize offset = 0;
-        vkCmdBindVertexBuffers(command, 0, 1, &model.vtx_buffer, &offset);
-        vkCmdBindIndexBuffer(command, model.idx_buffer, offset, VK_INDEX_TYPE_UINT32);
+        vkCmdBindVertexBuffers(command, 0, 1, &model.vertex.buffer, &offset);
+        vkCmdBindIndexBuffer(command, model.index.buffer, offset, VK_INDEX_TYPE_UINT32);
         for (int i = 0; i < 2; ++i) {
             // NOTE: ディスクリプタセットを適応する。
             // NOTE: 一度適応してからずっと同じものが使われるため、なるべく同じものを連続して使えるような順番で描画したほうが良い。
@@ -814,10 +815,10 @@ int main() {
 
     // termination
     vkDeviceWaitIdle(device);
-    vkFreeMemory(device, model.vtx_memory, NULL);
-    vkFreeMemory(device, model.idx_memory, NULL);
-    vkDestroyBuffer(device, model.vtx_buffer, NULL);
-    vkDestroyBuffer(device, model.idx_buffer, NULL);
+    vkFreeMemory(device, model.vertex.memory, NULL);
+    vkFreeMemory(device, model.index.memory, NULL);
+    vkDestroyBuffer(device, model.vertex.buffer, NULL);
+    vkDestroyBuffer(device, model.index.buffer, NULL);
     for (int i = 0; i < 2; ++i) {
         vkFreeMemory(device, uniform_buffers[i].memory, NULL);
         vkDestroyBuffer(device, uniform_buffers[i].buffer, NULL);
