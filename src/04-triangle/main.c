@@ -1,5 +1,12 @@
 #include "../common/vulkan-tutorial.h"
 
+// A struct for vertex input data.
+// NOTE: 頂点情報の構造。
+// NOTE: のちのち変更されるため、vulkan-tutorial.hではなくここで定義しておく。
+typedef struct Vertex_t {
+    float pos[3];
+} Vertex;
+
 int main() {
     // window
     GLFWwindow* window;
@@ -383,7 +390,7 @@ int main() {
         const VkVertexInputBindingDescription vert_inp_binding_dcs[] = {
             // TODO: 3つ目の説明を追加する。
             // NOTE: バインディング番号、サイズ、
-            { 0, sizeof(float) * 3, VK_VERTEX_INPUT_RATE_VERTEX },
+            { 0, sizeof(Vertex), VK_VERTEX_INPUT_RATE_VERTEX },
         };
         // NOTE: 頂点情報の構造の説明。
         // NOTE: バインディングが複数あってもフラットな配列にする。
@@ -545,10 +552,10 @@ int main() {
         // NOTE:   * y: [-1, 1] up to down
         // NOTE:   * z: [0, 1] far to near (遠近は頂点座標のwで調整するので、方向はどうでもいい)
         // NOTE: であるため、上向きの三角形の頂点座標は以下のようになる。
-        const float vtxs[3][3] = {
-            { -0.5f,  0.5f, 0.0f }, // NOTE: 左下。
-            {  0.5f,  0.5f, 0.0f }, // NOTE: 右下。
-            {  0.0f, -0.5f, 0.0f }, // NOTE: 中上。
+        const Vertex vtxs[3] = {
+            { { -0.5f,  0.5f, 0.0f } }, // NOTE: 左下。
+            { {  0.5f,  0.5f, 0.0f } }, // NOTE: 右下。
+            { {  0.0f, -0.5f, 0.0f } }, // NOTE: 中上。
         };
         // NOTE: カリングを考慮して反時計回りに結ぶ。
         const uint32_t idxs[3] = { 0, 1, 2 };
@@ -558,7 +565,7 @@ int main() {
                 device,
                 &phys_device_memory_prop,
                 3,
-                sizeof(float) * 3 * 3,
+                sizeof(Vertex) * 3,
                 (const float *)vtxs,
                 (const uint32_t *)idxs,
                 &model
@@ -608,8 +615,8 @@ int main() {
         // NOTE: モデルを関連付ける。
         // NOTE: 残念ながらコマンドバッファごとに関連付けるので、一つしかモデルがなくとも、毎フレーム行う。
         const VkDeviceSize offset = 0;
-        vkCmdBindVertexBuffers(command, 0, 1, &model.vtx_buffer, &offset);
-        vkCmdBindIndexBuffer(command, model.idx_buffer, offset, VK_INDEX_TYPE_UINT32);
+        vkCmdBindVertexBuffers(command, 0, 1, &model.vertex.buffer, &offset);
+        vkCmdBindIndexBuffer(command, model.index.buffer, offset, VK_INDEX_TYPE_UINT32);
         // NOTE: ドローコール。
         vkCmdDrawIndexed(command, model.index_cnt, 1, 0, 0, 0);
 
@@ -649,10 +656,10 @@ int main() {
 
     // termination
     vkDeviceWaitIdle(device);
-    vkFreeMemory(device, model.vtx_memory, NULL);
-    vkFreeMemory(device, model.idx_memory, NULL);
-    vkDestroyBuffer(device, model.vtx_buffer, NULL);
-    vkDestroyBuffer(device, model.idx_buffer, NULL);
+    vkFreeMemory(device, model.vertex.memory, NULL);
+    vkFreeMemory(device, model.index.memory, NULL);
+    vkDestroyBuffer(device, model.vertex.buffer, NULL);
+    vkDestroyBuffer(device, model.index.buffer, NULL);
     vkDestroyPipeline(device, pipeline, NULL);
     vkDestroyPipelineLayout(device, pipeline_layout, NULL);
     vkDestroyShaderModule(device, frag_shader, NULL);

@@ -8,7 +8,7 @@ ifeq ($(OS),Windows_NT)
 	out=./build/a.exe
 	opt=-L./build/ -lglfw3 -lvulkan-1
 	cln=del .\build\a.exe .\build\*.spv
-else ifeq ($(shell type lsb_release > /dev/null 2>&1 && lsb_release),Ubuntu)
+else ifeq ($(shell type lsb_release > /dev/null 2>&1 && lsb_release -i -s),Ubuntu)
 	opt=-lglfw3 -lvulkan -lm
 endif
 
@@ -32,5 +32,9 @@ endif
 	glslc -o ./build/shader.vert.spv ./src/06-camera/shader.vert
 	glslc -o ./build/shader.frag.spv ./src/06-camera/shader.frag
 	gcc -o $(out) ./src/06-camera/main.c ./src/common/debug.c ./src/common/read_bin.c ./src/common/buffer.c $(opt)
+07:
+	glslc -o ./build/shader.vert.spv ./src/07-image/shader.vert
+	glslc -o ./build/shader.frag.spv ./src/07-image/shader.frag
+	gcc -o $(out) ./src/07-image/main.c ./src/common/debug.c ./src/common/read_bin.c ./src/common/buffer.c $(opt)
 clean:
 	$(cln)

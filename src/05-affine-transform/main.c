@@ -1,5 +1,10 @@
 #include "../common/vulkan-tutorial.h"
 
+// A struct for vertex input data.
+typedef struct Vertex_t {
+    float pos[3];
+} Vertex;
+
 // A struct for organizing the layout of push constant data.
 // NOTE: プッシュコンスタントの構造。
 // NOTE: のちのち変更されるため、vulkan-tutorial.hではなくここで定義しておく。
@@ -387,7 +392,7 @@ int main() {
 
         // vertex input
         const VkVertexInputBindingDescription vert_inp_binding_dcs[] = {
-            { 0, sizeof(float) * 3, VK_VERTEX_INPUT_RATE_VERTEX },
+            { 0, sizeof(Vertex), VK_VERTEX_INPUT_RATE_VERTEX },
         };
         const VkVertexInputAttributeDescription vert_inp_attr_dcs[] = {
             { 0, 0, VK_FORMAT_R32G32B32_SFLOAT, 0 },
@@ -521,10 +526,10 @@ int main() {
     // model 0
     {
         // NOTE: 正三角形。
-        const float vtxs[3][3] = {
-            { -0.5f,  0.25f, 0.0f },
-            {  0.5f,  0.25f, 0.0f },
-            {  0.0f, -0.616f, 0.0f },
+        const Vertex vtxs[3] = {
+            { { -0.5f,   0.25f, 0.0f } },
+            { {  0.5f,   0.25f, 0.0f } },
+            { {  0.0f, -0.616f, 0.0f } },
         };
         const uint32_t idxs[3] = { 0, 1, 2 };
         CHECK_VK(
@@ -532,7 +537,7 @@ int main() {
                 device,
                 &phys_device_memory_prop,
                 3,
-                sizeof(float) * 3 * 3,
+                sizeof(Vertex) * 3,
                 (const float *)vtxs,
                 (const uint32_t *)idxs,
                 &models[0]
@@ -543,11 +548,11 @@ int main() {
     // model 1
     {
         // NOTE: 正方形。
-        const float vtxs[4][3] = {
-            { -0.5f,  0.5f, 0.0f }, // NOTE: 左下。
-            {  0.5f,  0.5f, 0.0f }, // NOTE: 右下。
-            {  0.5f, -0.5f, 0.0f }, // NOTE: 右上。
-            { -0.5f, -0.5f, 0.0f }, // NOTE: 左上。
+        const Vertex vtxs[4] = {
+            { { -0.5f,  0.5f, 0.0f } }, // NOTE: 左下。
+            { {  0.5f,  0.5f, 0.0f } }, // NOTE: 右下。
+            { {  0.5f, -0.5f, 0.0f } }, // NOTE: 右上。
+            { { -0.5f, -0.5f, 0.0f } }, // NOTE: 左上。
         };
         const uint32_t idxs[6] = { 0, 1, 2, 0, 2, 3 };
         CHECK_VK(
@@ -555,7 +560,7 @@ int main() {
                 device,
                 &phys_device_memory_prop,
                 6,
-                sizeof(float) * 3 * 4,
+                sizeof(Vertex) * 4,
                 (const float *)vtxs,
                 (const uint32_t *)idxs,
                 &models[1]

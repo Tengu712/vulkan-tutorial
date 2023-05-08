@@ -4,6 +4,9 @@ layout(push_constant) uniform PushConstant {
     vec4 scl;
     vec4 rot;
     vec4 trs;
+    vec4 view_pos;
+    vec4 view_rot;
+    vec4 proj_param;
 } constant;
 
 layout(binding = 0) uniform Camera {
