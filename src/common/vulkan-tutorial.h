@@ -49,6 +49,11 @@ typedef struct FrameData_t {
     VkSemaphore semaphore;
 } FrameData;
 
+typedef struct Buffer_t {
+    VkBuffer buffer;
+    VkDeviceMemory memory;
+} Buffer;
+
 typedef struct Model_t {
     uint32_t index_cnt;
     VkBuffer vtx_buffer;
@@ -56,6 +61,11 @@ typedef struct Model_t {
     VkDeviceMemory vtx_memory;
     VkDeviceMemory idx_memory;
 } Model;
+
+typedef struct CameraData_t {
+    float view[16];
+    float proj[16];
+} CameraData;
 
 #ifndef RELEASE_BUILD
     void set_glfw_error_callback();

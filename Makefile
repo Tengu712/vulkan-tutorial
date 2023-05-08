@@ -1,13 +1,15 @@
 .PHONY: 00 01 02 03 04 05 clean
 
 out=./build/a.out
-opt=-lglfw3 -lvulkan -lm
+opt=-lglfw -lvulkan -lm
 cln=rm -rf ./build/a.out ./build/*.spv
 
 ifeq ($(OS),Windows_NT)
 	out=./build/a.exe
 	opt=-L./build/ -lglfw3 -lvulkan-1
 	cln=del .\build\a.exe .\build\*.spv
+else ifeq ($(shell type lsb_release > /dev/null 2>&1 && lsb_release),Ubuntu)
+	opt=-lglfw3 -lvulkan -lm
 endif
 
 00:

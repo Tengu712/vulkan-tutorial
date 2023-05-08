@@ -1,5 +1,7 @@
 #include "../common/vulkan-tutorial.h"
 
+#include <math.h>
+
 // A struct for organizing the layout of push constant data.
 typedef struct PushConstant_t {
     float scl[4];
@@ -349,6 +351,7 @@ int main() {
     VkDescriptorSet descriptor_sets[2];
     {
         // descriptor layout
+        // TODO: メンバについて詳しく書く。
         // NOTE: どの種類が何個あるか指定する。
         const VkDescriptorSetLayoutBinding desc_set_layout_binds[] = {
             {
@@ -410,8 +413,8 @@ int main() {
             VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
             NULL,
             0,
-            0,
-            NULL,
+            1,
+            &descriptor_set_layout,
             1,
             push_constant_ranges,
         };
@@ -570,38 +573,111 @@ int main() {
         CHECK_VK(vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, cis, NULL, &pipeline), "failed to create a pipeline.");
     }
 
-    // models
-    Model models[2];
-    // model 0
+    // descriptor sets for cameras
+    // NOTE: カメラをディスクリプタに設定する。
+    Buffer uniform_buffers[2];
     {
-        // NOTE: 正三角形。
-        const float vtxs[3][3] = {
-            { -0.5f,  0.25f, 0.0f },
-            {  0.5f,  0.25f, 0.0f },
-            {  0.0f, -0.616f, 0.0f },
+        // NOTE: ユニフォームバッファに格納するデータを定義する。
+        // NOTE: 列優先であることに注意する。
+        const float div_tanpov = 1.0f / tan(3.1415f / 4.0f);
+        CameraData cameras[2] = {
+            // camera 0
+            {
+                // NOTE: ビュー変換行列。
+                // NOTE: 座標が(160, 0, -320)でZ軸正の向きを向いているようなカメラ。
+                // NOTE: つまり、被写体をx方向に-160、z方向に320移動する平行移動行列。
+                {
+                       1.0f, 0.0f,   0.0f, 0.0f,
+                       0.0f, 1.0f,   0.0f, 0.0f,
+                       0.0f, 0.0f,   1.0f, 0.0f,
+                    -160.0f, 0.0f, 320.0f, 1.0f,
+                },
+                // NOTE: 平行投影行列。
+                // NOTE: 幅640、高さ480、深さ1000。
+                {
+                    2.0f / 640.0f,          0.0f,           0.0f, 0.0f,
+                             0.0f, 2.0f / 480.0f,           0.0f, 0.0f,
+                             0.0f,          0.0f, 2.0f / 1000.0f, 0.0f,
+                             0.0f,          0.0f,           0.0f, 1.0f,
+                },
+            },
+            // camera 1
+            {
+                // NOTE: ビュー変換行列。
+                // NOTE: 座標が(-160, 0, -320)でZ軸正の向きを向いているようなカメラ。
+                {
+                      1.0f, 0.0f,   0.0f, 0.0f,
+                      0.0f, 1.0f,   0.0f, 0.0f,
+                      0.0f, 0.0f,   1.0f, 0.0f,
+                    160.0f, 0.0f, 320.0f, 1.0f,
+                },
+                // NOTE: 透視投影行列。
+                // NOTE: 視野角90度、アスペクト比4:3、near=0、far=1000。
+                {
+                    div_tanpov,                     0.0f, 0.0f, 0.0f,
+                          0.0f, div_tanpov * 4.0f / 3.0f, 0.0f, 0.0f,
+                          0.0f,                     0.0f, 1.0f, 1.0f,
+                          0.0f,                     0.0f, 0.0f, 0.0f,
+                },
+            },
         };
-        const uint32_t idxs[3] = { 0, 1, 2 };
-        CHECK_VK(
-            create_model(
-                device,
-                &phys_device_memory_prop,
-                3,
-                sizeof(float) * 3 * 3,
-                (const float *)vtxs,
-                (const uint32_t *)idxs,
-                &models[0]
-            ),
-            "failed to create the first model."
-        );
+        // NOTE: バッファを作り、値を格納して、ディスクリプタセットを更新する。
+        for (int i = 0; i < 2; ++i) {
+            // NOTE: バッファを作る。
+            CHECK_VK(
+                create_buffer(
+                    device,
+                    &phys_device_memory_prop,
+                    sizeof(CameraData),
+                    VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+                    VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                    &uniform_buffers[i].buffer,
+                    &uniform_buffers[i].memory
+                ),
+                "failed to create a uniform buffer."
+            );
+            // NOTE: バッファに値を格納する。
+            CHECK_VK(
+                map_memory(
+                    device,
+                    uniform_buffers[i].memory,
+                    (void *)&cameras[i],
+                    sizeof(CameraData)
+                ),
+                "failed to map a camera data to a uniform buffer."
+            );
+            // NOTE: ディスクリプタセットを更新する。
+            const VkDescriptorBufferInfo bi = {
+                uniform_buffers[i].buffer,
+                0,
+                VK_WHOLE_SIZE,
+            };
+            const VkWriteDescriptorSet write_desc_sets[] = {
+                {
+                    VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                    NULL,
+                    descriptor_sets[i],
+                    0,
+                    0,
+                    1,
+                    VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                    NULL,
+                    &bi,
+                    NULL,
+                },
+            };
+            vkUpdateDescriptorSets(device, 1, write_desc_sets, 0, NULL);
+        }
     }
-    // model 1
+
+    // model
+    Model model;
     {
-        // NOTE: 正方形。
         const float vtxs[4][3] = {
-            { -0.5f,  0.5f, 0.0f }, // NOTE: 左下。
-            {  0.5f,  0.5f, 0.0f }, // NOTE: 右下。
-            {  0.5f, -0.5f, 0.0f }, // NOTE: 右上。
-            { -0.5f, -0.5f, 0.0f }, // NOTE: 左上。
+            { -0.5f,  0.5f, 0.0f },
+            {  0.5f,  0.5f, 0.0f },
+            {  0.5f, -0.5f, 0.0f },
+            { -0.5f, -0.5f, 0.0f },
         };
         const uint32_t idxs[6] = { 0, 1, 2, 0, 2, 3 };
         CHECK_VK(
@@ -612,9 +688,9 @@ int main() {
                 sizeof(float) * 3 * 4,
                 (const float *)vtxs,
                 (const uint32_t *)idxs,
-                &models[1]
+                &model
             ),
-            "failed to create the second model."
+            "failed to create a model."
         );
     }
 
@@ -629,16 +705,17 @@ int main() {
     // NOTE: 例えば、右下の頂点のローカル座標がx=y=0.5であるため、z=500の位置でx方向に1000倍、y方向に750倍すると、
     // NOTE: クリッピング座標系においてx=1,y=1に位置する。
     // NOTE: 逆に、z=320の位置では、ローカル座標系において1x1である正方形は640x480のキャンバスにおける1ピクセルのように扱える。
+    // NOTE: 今回、位置に関してはカメラで調整する。
     PushConstant push_constants[2] = {
         {
             { 160.0, 160.0, 1.0, 0.0 },
             { 0.0, 0.0, 0.0, 0.0 },
-            { -160.0, -120.0, 320.0, 0.0 },
+            { 0.0, 0.0, 0.0, 0.0 },
         },
         {
             { 160.0, 160.0, 1.0, 0.0 },
             { 0.0, 0.0, 0.0, 0.0 },
-            { 80.0, 60.0, 320.0, 0.0 },
+            { 0.0, 0.0, 0.0, 0.0 },
         },
     };
     while (1) {
@@ -646,7 +723,8 @@ int main() {
             break;
         glfwPollEvents();
 
-        push_constants[0].rot[2] += 0.01f;
+        push_constants[0].rot[0] += 0.01f;
+        push_constants[0].rot[1] += 0.01f;
         push_constants[1].rot[0] += 0.01f;
         push_constants[1].rot[1] += 0.01f;
 
@@ -679,12 +757,25 @@ int main() {
         vkCmdBindPipeline(command, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
 
         // draw
+        // NOTE: 今回モデルは一種類しか使わない。
+        const VkDeviceSize offset = 0;
+        vkCmdBindVertexBuffers(command, 0, 1, &model.vtx_buffer, &offset);
+        vkCmdBindIndexBuffer(command, model.idx_buffer, offset, VK_INDEX_TYPE_UINT32);
         for (int i = 0; i < 2; ++i) {
-            const VkDeviceSize offset = 0;
-            vkCmdBindVertexBuffers(command, 0, 1, &models[i].vtx_buffer, &offset);
-            vkCmdBindIndexBuffer(command, models[i].idx_buffer, offset, VK_INDEX_TYPE_UINT32);
+            // NOTE: ディスクリプタセットを適応する。
+            // NOTE: 一度適応してからずっと同じものが使われるため、なるべく同じものを連続して使えるような順番で描画したほうが良い。
+            vkCmdBindDescriptorSets(
+                command,
+                VK_PIPELINE_BIND_POINT_GRAPHICS,
+                pipeline_layout,
+                0, // NOTE: セット番号。
+                1,
+                &descriptor_sets[i],
+                0, // NOTE: ダイナミックオフセットの数。
+                NULL // NOTE: ダイナミックオフセットへのポインタ。
+            );
             vkCmdPushConstants(command, pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PushConstant), (const void *)&push_constants[i]);
-            vkCmdDrawIndexed(command, models[i].index_cnt, 1, 0, 0, 0);
+            vkCmdDrawIndexed(command, model.index_cnt, 1, 0, 0, 0);
         }
 
         // end
@@ -723,11 +814,13 @@ int main() {
 
     // termination
     vkDeviceWaitIdle(device);
+    vkFreeMemory(device, model.vtx_memory, NULL);
+    vkFreeMemory(device, model.idx_memory, NULL);
+    vkDestroyBuffer(device, model.vtx_buffer, NULL);
+    vkDestroyBuffer(device, model.idx_buffer, NULL);
     for (int i = 0; i < 2; ++i) {
-        vkFreeMemory(device, models[i].vtx_memory, NULL);
-        vkFreeMemory(device, models[i].idx_memory, NULL);
-        vkDestroyBuffer(device, models[i].vtx_buffer, NULL);
-        vkDestroyBuffer(device, models[i].idx_buffer, NULL);
+        vkFreeMemory(device, uniform_buffers[i].memory, NULL);
+        vkDestroyBuffer(device, uniform_buffers[i].buffer, NULL);
     }
     vkDestroyPipeline(device, pipeline, NULL);
     vkDestroyPipelineLayout(device, pipeline_layout, NULL);
