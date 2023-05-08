@@ -10,6 +10,8 @@
 
 #define CHECK(p, s) if (!(p)) { fprintf(stderr, "[ Error   ] %s\n", (s)); return 1; }
 #define CHECK_VK(p, s) if ((p) != VK_SUCCESS) { fprintf(stderr, "[ Error   ] %s\n", (s)); return (p); }
+#define CHECK_RETURN(p) { if (!(p)) return VK_ERROR_UNKNOWN; }
+#define CHECK_RETURN_VK(p) { VkResult res = (p); if (res != VK_SUCCESS) return res; }
 #define WARN_VK(p, s) if ((p) != VK_SUCCESS) printf("[ Warning ] %s\n", (s));
 #define WINDOW_WIDTH 640
 #define WINDOW_HEIGHT 480
@@ -65,6 +67,12 @@ typedef struct CameraData_t {
     float proj[16];
 } CameraData;
 
+typedef struct ImageTexture_t {
+    VkImage image;
+    VkImageView view;
+    VkDeviceMemory memory;
+} ImageTexture;
+
 #ifndef RELEASE_BUILD
     void set_glfw_error_callback();
     VkResult set_vulkan_debug_callback(const VkInstance instance);
@@ -73,7 +81,11 @@ typedef struct CameraData_t {
 
 char *read_bin(const char *path, int *p_size);
 
-int32_t get_memory_type_index(const VkPhysicalDeviceMemoryProperties *mem_prop, VkMemoryRequirements reqs, VkMemoryPropertyFlags flags);
+int32_t get_memory_type_index(
+    const VkPhysicalDeviceMemoryProperties *mem_prop,
+    const VkMemoryRequirements *reqs,
+    VkMemoryPropertyFlags flags
+);
 VkResult create_buffer(
     const VkDevice device,
     const VkPhysicalDeviceMemoryProperties *mem_prop,
@@ -91,4 +103,13 @@ VkResult create_model(
     const float *vtxs,
     const uint32_t *idxs,
     Model *out
+);
+
+VkResult create_image_texture_from_file(
+    const VkDevice device,
+    const VkPhysicalDeviceMemoryProperties *mem_prop,
+    const VkCommandPool command_pool,
+    const VkQueue queue,
+    const char *path,
+    ImageTexture *out
 );

@@ -5,6 +5,8 @@
 // A struct for vertex input data.
 typedef struct Vertex_t {
     float pos[3];
+    // NOTE: 各頂点にUV座標を指定する。
+    float uv[2];
 } Vertex;
 
 // A struct for organizing the layout of push constant data.
@@ -346,24 +348,54 @@ int main() {
         free(bin_frag);
     }
 
+    // sampler
+    // NOTE: サンプラーを作る。
+    VkSampler sampler;
+    {
+        const VkSamplerCreateInfo ci = {
+            VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+            NULL,
+            0,
+            VK_FILTER_LINEAR,
+            VK_FILTER_LINEAR,
+            VK_SAMPLER_MIPMAP_MODE_NEAREST,
+            VK_SAMPLER_ADDRESS_MODE_REPEAT,
+            VK_SAMPLER_ADDRESS_MODE_REPEAT,
+            VK_SAMPLER_ADDRESS_MODE_REPEAT,
+            0.0,
+            0,
+            1.0,
+            0,
+            VK_COMPARE_OP_NEVER,
+            0.0,
+            0.0,
+            VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE,
+            0,
+        };
+        CHECK_VK(vkCreateSampler(device, &ci, NULL, &sampler), "failed to create a sampler.");
+    }
+
     // descriptor sets
-    // NOTE: ディスクリプタセッツを作る。
-    // NOTE: プッシュコンスタントとは違い、予めメモリを確保し、シェーダで使うデータをそこへ格納しておく。
-    // NOTE: つまり、一フレーム中にユニフォームバッファやサンプラーの値を変えたい場合は、その分だけディスクリプタセットを作る必要がある。
-    // NOTE: 今回は、描画対象が二つと確定しており、必要なディスクリプタセットが二つと確定しているため、二つ作る。
     VkDescriptorSetLayout descriptor_set_layout;
     VkDescriptorPool descriptor_pool;
-    VkDescriptorSet descriptor_sets[2];
+    VkDescriptorSet descriptor_set;
     {
         // descriptor layout
-        // TODO: メンバについて詳しく書く。
-        // NOTE: どの種類が何個あるか指定する。
         const VkDescriptorSetLayoutBinding desc_set_layout_binds[] = {
             {
-                0, // NOTE: バインディング番号。
+                0,
                 VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
                 1,
                 VK_SHADER_STAGE_VERTEX_BIT,
+                NULL,
+            },
+            // NOTE: サンプラーをディスクリプタセットのレイアウトに追加する。
+            // NOTE: フラグメントシェーダに関連付ける。
+            {
+                1,
+                VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                1,
+                VK_SHADER_STAGE_FRAGMENT_BIT,
                 NULL,
             },
         };
@@ -371,7 +403,7 @@ int main() {
             VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
             NULL,
             0,
-            1,
+            2,
             desc_set_layout_binds,
         };
         CHECK_VK(vkCreateDescriptorSetLayout(device, &desc_set_layout_ci, NULL, &descriptor_set_layout), "failed to create a descriptor set layout.");
@@ -391,16 +423,14 @@ int main() {
             desc_pool_sizes,
         };
         CHECK_VK(vkCreateDescriptorPool(device, &desc_pool_ci, NULL, &descriptor_pool), "failed to create a descriptor pool.");
-        for (uint32_t i = 0; i < 2; ++i) {
-            const VkDescriptorSetAllocateInfo ai = {
-                VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-                NULL,
-                descriptor_pool,
-                1,
-                &descriptor_set_layout,
-            };
-            CHECK_VK(vkAllocateDescriptorSets(device, &ai, &descriptor_sets[i]), "failed to allocate a descriptor set.");
-        }
+        const VkDescriptorSetAllocateInfo ai = {
+            VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+            NULL,
+            descriptor_pool,
+            1,
+            &descriptor_set_layout,
+        };
+        CHECK_VK(vkAllocateDescriptorSets(device, &ai, &descriptor_set), "failed to allocate a descriptor set.");
     }
 
     // pipeline
@@ -453,6 +483,9 @@ int main() {
         };
         const VkVertexInputAttributeDescription vert_inp_attr_dcs[] = {
             { 0, 0, VK_FORMAT_R32G32B32_SFLOAT, 0 },
+            // NOTE: UV座標を追加する。
+            // NOTE: これ自動化できないの辛い……。
+            { 1, 0, VK_FORMAT_R32G32_SFLOAT, sizeof(float) * 3 },
         };
         const VkPipelineVertexInputStateCreateInfo vert_inp_ci = {
             VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
@@ -460,7 +493,7 @@ int main() {
             0,
             1,
             vert_inp_binding_dcs,
-            1,
+            2, // NOTE: ここも変える。
             vert_inp_attr_dcs,
         };
 
@@ -579,109 +612,103 @@ int main() {
     }
 
     // descriptor sets for cameras
-    // NOTE: カメラをディスクリプタに設定する。
-    Buffer uniform_buffers[2];
+    Buffer uniform_buffer;
+    ImageTexture img_tex;
     {
-        // NOTE: ユニフォームバッファに格納するデータを定義する。
-        // NOTE: 列優先であることに注意する。
+        // camera
         const float div_tanpov = 1.0f / tan(3.1415f / 4.0f);
-        CameraData cameras[2] = {
-            // camera 0
+        CameraData camera = {
             {
-                // NOTE: ビュー変換行列。
-                // NOTE: 座標が(160, 0, -320)でZ軸正の向きを向いているようなカメラ。
-                // NOTE: つまり、被写体をx方向に-160、z方向に320移動する平行移動行列。
-                {
-                       1.0f, 0.0f,   0.0f, 0.0f,
-                       0.0f, 1.0f,   0.0f, 0.0f,
-                       0.0f, 0.0f,   1.0f, 0.0f,
-                    -160.0f, 0.0f, 320.0f, 1.0f,
-                },
-                // NOTE: 平行投影行列。
-                // NOTE: 幅640、高さ480、深さ1000。
-                {
-                    2.0f / 640.0f,          0.0f,           0.0f, 0.0f,
-                             0.0f, 2.0f / 480.0f,           0.0f, 0.0f,
-                             0.0f,          0.0f, 2.0f / 1000.0f, 0.0f,
-                             0.0f,          0.0f,           0.0f, 1.0f,
-                },
+                1.0f, 0.0f, 0.0f, 0.0f,
+                0.0f, 1.0f, 0.0f, 0.0f,
+                0.0f, 0.0f, 1.0f, 0.0f,
+                0.0f, 0.0f, 320.0f, 1.0f,
             },
-            // camera 1
             {
-                // NOTE: ビュー変換行列。
-                // NOTE: 座標が(-160, 0, -320)でZ軸正の向きを向いているようなカメラ。
-                {
-                      1.0f, 0.0f,   0.0f, 0.0f,
-                      0.0f, 1.0f,   0.0f, 0.0f,
-                      0.0f, 0.0f,   1.0f, 0.0f,
-                    160.0f, 0.0f, 320.0f, 1.0f,
-                },
-                // NOTE: 透視投影行列。
-                // NOTE: 視野角90度、アスペクト比4:3、near=0、far=1000。
-                {
-                    div_tanpov,                     0.0f, 0.0f, 0.0f,
-                          0.0f, div_tanpov * 4.0f / 3.0f, 0.0f, 0.0f,
-                          0.0f,                     0.0f, 1.0f, 1.0f,
-                          0.0f,                     0.0f, 0.0f, 0.0f,
-                },
+                div_tanpov,                     0.0f, 0.0f, 0.0f,
+                      0.0f, div_tanpov * 4.0f / 3.0f, 0.0f, 0.0f,
+                      0.0f,                     0.0f, 1.0f, 1.0f,
+                      0.0f,                     0.0f, 0.0f, 0.0f,
             },
         };
-        // NOTE: バッファを作り、値を格納して、ディスクリプタセットを更新する。
-        for (int i = 0; i < 2; ++i) {
-            // NOTE: バッファを作る。
-            CHECK_VK(
-                create_buffer(
-                    device,
-                    &phys_device_memory_prop,
-                    sizeof(CameraData),
-                    VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-                    VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                    &uniform_buffers[i]
-                ),
-                "failed to create a uniform buffer."
-            );
-            // NOTE: バッファに値を格納する。
-            CHECK_VK(
-                map_memory(
-                    device,
-                    uniform_buffers[i].memory,
-                    (void *)&cameras[i],
-                    sizeof(CameraData)
-                ),
-                "failed to map a camera data to a uniform buffer."
-            );
-            // NOTE: ディスクリプタセットを更新する。
-            const VkDescriptorBufferInfo bi = {
-                uniform_buffers[i].buffer,
+        CHECK_VK(
+            create_buffer(
+                device,
+                &phys_device_memory_prop,
+                sizeof(CameraData),
+                VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+                VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                &uniform_buffer
+            ),
+            "failed to create a uniform buffer."
+        );
+        CHECK_VK(
+            map_memory(
+                device,
+                uniform_buffer.memory,
+                (void *)&camera,
+                sizeof(CameraData)
+            ),
+            "failed to map a camera data to a uniform buffer."
+        );
+        // image
+        // NOTE: イメージテクスチャを作る。
+        // NOTE: 汎用性があるロジックであるため、関数に切り分けた。common/image.cで定義されている。
+        CHECK_VK(
+            create_image_texture_from_file(device, &phys_device_memory_prop, command_pool, queue, "../img/shape.png", &img_tex),
+            "failed to create a image texture."
+        );
+        // update
+        const VkDescriptorBufferInfo bi = {
+            uniform_buffer.buffer,
+            0,
+            VK_WHOLE_SIZE,
+        };
+        // NOTE: イメージテクスチャをディスクリプタセットに設定する。
+        const VkDescriptorImageInfo ii = {
+            sampler,
+            img_tex.view,
+            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+        };
+        const VkWriteDescriptorSet write_desc_sets[] = {
+            {
+                VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                NULL,
+                descriptor_set,
                 0,
-                VK_WHOLE_SIZE,
-            };
-            const VkWriteDescriptorSet write_desc_sets[] = {
-                {
-                    VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-                    NULL,
-                    descriptor_sets[i],
-                    0,
-                    0,
-                    1,
-                    VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-                    NULL,
-                    &bi,
-                    NULL,
-                },
-            };
-            vkUpdateDescriptorSets(device, 1, write_desc_sets, 0, NULL);
-        }
+                0,
+                1,
+                VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                NULL,
+                &bi,
+                NULL,
+            },
+            // NOTE: ここも追加。
+            {
+                VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                NULL,
+                descriptor_set,
+                1,
+                0,
+                1,
+                VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                &ii,
+                NULL,
+                NULL,
+            },
+        };
+        vkUpdateDescriptorSets(device, 2, write_desc_sets, 0, NULL);
     }
 
     // model
     Model model;
     {
+        // NOTE: UV座標を指定する。左上原点であることに注意する。
         const Vertex vtxs[4] = {
-            { { -0.5f,  0.5f, 0.0f } },
-            { {  0.5f,  0.5f, 0.0f } },
-            { {  0.5f, -0.5f, 0.0f } },
-            { { -0.5f, -0.5f, 0.0f } },
+            { { -0.5f,  0.5f, 0.0f }, { 0.0f, 1.0f } },
+            { {  0.5f,  0.5f, 0.0f }, { 1.0f, 1.0f } },
+            { {  0.5f, -0.5f, 0.0f }, { 1.0f, 0.0f } },
+            { { -0.5f, -0.5f, 0.0f }, { 0.0f, 0.0f } },
         };
         const uint32_t idxs[6] = { 0, 1, 2, 0, 2, 3 };
         CHECK_VK(
@@ -701,38 +728,15 @@ int main() {
     // mainloop
     uint32_t pre_image_idx = 0;
     uint32_t cur_image_idx = 0;
-    // NOTE: 視錘台にアスペクト比が反映されているおかげで、1:1のポリゴンが正方形として描かれる。
-    // NOTE: その一方、視錘台の原点からの距離とポリゴンの大きさ(および拡大率)に注意しなければならない。
-    // NOTE: 今回は視野角90度、アスペクト比4:3の視錘台であるため、z=500の位置では次の範囲が正規範囲に収まる：
-    // NOTE:   * x: [-500, 500]
-    // NOTE:   * y: [-375, 375]
-    // NOTE: 例えば、右下の頂点のローカル座標がx=y=0.5であるため、z=500の位置でx方向に1000倍、y方向に750倍すると、
-    // NOTE: クリッピング座標系においてx=1,y=1に位置する。
-    // NOTE: 逆に、z=320の位置では、ローカル座標系において1x1である正方形は640x480のキャンバスにおける1ピクセルのように扱える。
-    // NOTE: 今回、位置に関してはカメラで調整する。
-    PushConstant push_constants[2] = {
-        {
-            { 160.0, 160.0, 1.0, 0.0 },
-            { 0.0, 0.0, 0.0, 0.0 },
-            { 0.0, 0.0, 0.0, 0.0 },
-        },
-        {
-            { 160.0, 160.0, 1.0, 0.0 },
-            { 0.0, 0.0, 0.0, 0.0 },
-            { 0.0, 0.0, 0.0, 0.0 },
-        },
+    PushConstant push_constant = {
+        { 320.0f, 320.0f, 1.0f, 0.0f },
+        { 0.0f, 0.0f, 0.0f, 0.0f },
+        { 0.0f, 0.0f, 0.0f, 0.0f },
     };
     while (1) {
         if (glfwWindowShouldClose(window))
             break;
         glfwPollEvents();
-
-        push_constants[0].rot[0] += 0.01f;
-        push_constants[0].rot[1] += 0.01f;
-        push_constants[0].rot[2] += 0.01f;
-        push_constants[1].rot[0] += 0.01f;
-        push_constants[1].rot[1] += 0.01f;
-        push_constants[1].rot[2] += 0.01f;
 
         // prepare
         WARN_VK(vkAcquireNextImageKHR(device, swapchain, UINT64_MAX, frame_data[pre_image_idx].semaphore, VK_NULL_HANDLE, &cur_image_idx), "failed to acquire a next image index.");
@@ -763,26 +767,21 @@ int main() {
         vkCmdBindPipeline(command, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
 
         // draw
-        // NOTE: 今回モデルは一種類しか使わない。
         const VkDeviceSize offset = 0;
         vkCmdBindVertexBuffers(command, 0, 1, &model.vertex.buffer, &offset);
         vkCmdBindIndexBuffer(command, model.index.buffer, offset, VK_INDEX_TYPE_UINT32);
-        for (int i = 0; i < 2; ++i) {
-            // NOTE: ディスクリプタセットを適応する。
-            // NOTE: 一度適応してからずっと同じものが使われるため、なるべく同じものを連続して使えるような順番で描画したほうが良い。
-            vkCmdBindDescriptorSets(
-                command,
-                VK_PIPELINE_BIND_POINT_GRAPHICS,
-                pipeline_layout,
-                0, // NOTE: セット番号。
-                1,
-                &descriptor_sets[i],
-                0, // NOTE: ダイナミックオフセットの数。
-                NULL // NOTE: ダイナミックオフセットへのポインタ。
-            );
-            vkCmdPushConstants(command, pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PushConstant), (const void *)&push_constants[i]);
-            vkCmdDrawIndexed(command, model.index_cnt, 1, 0, 0, 0);
-        }
+        vkCmdBindDescriptorSets(
+            command,
+            VK_PIPELINE_BIND_POINT_GRAPHICS,
+            pipeline_layout,
+            0,
+            1,
+            &descriptor_set,
+            0,
+            NULL
+        );
+        vkCmdPushConstants(command, pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PushConstant), (const void *)&push_constant);
+        vkCmdDrawIndexed(command, model.index_cnt, 1, 0, 0, 0);
 
         // end
         vkCmdEndRenderPass(command);
@@ -824,14 +823,16 @@ int main() {
     vkFreeMemory(device, model.index.memory, NULL);
     vkDestroyBuffer(device, model.vertex.buffer, NULL);
     vkDestroyBuffer(device, model.index.buffer, NULL);
-    for (int i = 0; i < 2; ++i) {
-        vkFreeMemory(device, uniform_buffers[i].memory, NULL);
-        vkDestroyBuffer(device, uniform_buffers[i].buffer, NULL);
-    }
+    vkFreeMemory(device, uniform_buffer.memory, NULL);
+    vkDestroyBuffer(device, uniform_buffer.buffer, NULL);
+    vkFreeMemory(device, img_tex.memory, NULL);
+    vkDestroyImageView(device, img_tex.view, NULL);
+    vkDestroyImage(device, img_tex.image, NULL);
     vkDestroyPipeline(device, pipeline, NULL);
     vkDestroyPipelineLayout(device, pipeline_layout, NULL);
     vkDestroyDescriptorPool(device, descriptor_pool, NULL);
     vkDestroyDescriptorSetLayout(device, descriptor_set_layout, NULL);
+    vkDestroySampler(device, sampler, NULL);
     vkDestroyShaderModule(device, frag_shader, NULL);
     vkDestroyShaderModule(device, vert_shader, NULL);
     for (uint32_t i = 0; i < image_views_cnt; ++i) {

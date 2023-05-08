@@ -2,11 +2,13 @@
 
 #include <string.h>
 
-#define CHECK_RETURN(p) res = (p); if (res != VK_SUCCESS) return res;
-
-int32_t get_memory_type_index(const VkPhysicalDeviceMemoryProperties *mem_prop, VkMemoryRequirements reqs, VkMemoryPropertyFlags flags) {
+int32_t get_memory_type_index(
+    const VkPhysicalDeviceMemoryProperties *mem_prop,
+    const VkMemoryRequirements *reqs,
+    VkMemoryPropertyFlags flags
+) {
     for (int32_t i = 0; i < mem_prop->memoryTypeCount; ++i) {
-        if ((reqs.memoryTypeBits & (1 << i)) && (mem_prop->memoryTypes[i].propertyFlags & flags)) {
+        if ((reqs->memoryTypeBits & (1 << i)) && (mem_prop->memoryTypes[i].propertyFlags & flags)) {
             return i;
         }
     }
@@ -21,8 +23,6 @@ VkResult create_buffer(
     VkMemoryPropertyFlags flags,
     Buffer *out
 ) {
-    VkResult res;
-
     // create a buffer
     VkBufferCreateInfo buffer_create_info = {
         VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
@@ -33,7 +33,7 @@ VkResult create_buffer(
         VK_SHARING_MODE_EXCLUSIVE,
         0,
     };
-    CHECK_RETURN(vkCreateBuffer(device, &buffer_create_info, NULL, &out->buffer));
+    CHECK_RETURN_VK(vkCreateBuffer(device, &buffer_create_info, NULL, &out->buffer));
 
     // get memory requirements
     VkMemoryRequirements reqs;
@@ -46,19 +46,18 @@ VkResult create_buffer(
         reqs.size,
         0,
     };
-    allocate_info.memoryTypeIndex = get_memory_type_index(mem_prop, reqs, flags);
-    CHECK_RETURN(vkAllocateMemory(device, &allocate_info, NULL, &out->memory));
+    allocate_info.memoryTypeIndex = get_memory_type_index(mem_prop, &reqs, flags);
+    CHECK_RETURN_VK(vkAllocateMemory(device, &allocate_info, NULL, &out->memory));
 
     // bind buffer with memory
-    CHECK_RETURN(vkBindBufferMemory(device, out->buffer, out->memory, 0));
+    CHECK_RETURN_VK(vkBindBufferMemory(device, out->buffer, out->memory, 0));
 
     return VK_SUCCESS;
 }
 
 VkResult map_memory(const VkDevice device, const VkDeviceMemory device_memory, const void *data, int32_t size) {
-    VkResult res;
     void *p;
-    CHECK_RETURN(vkMapMemory(device, device_memory, 0, VK_WHOLE_SIZE, 0, &p));
+    CHECK_RETURN_VK(vkMapMemory(device, device_memory, 0, VK_WHOLE_SIZE, 0, &p));
     memcpy(p, data, size);
     vkUnmapMemory(device, device_memory);
     return VK_SUCCESS;
@@ -73,10 +72,9 @@ VkResult create_model(
     const uint32_t *idxs,
     Model *out
 ) {
-    VkResult res;
     out->index_cnt = index_cnt;
     const size_t idxs_size = sizeof(uint32_t) * index_cnt;
-    CHECK_RETURN(
+    CHECK_RETURN_VK(
         create_buffer(
             device,
             mem_prop,
@@ -86,7 +84,7 @@ VkResult create_model(
             &out->vertex
         )
     );
-    CHECK_RETURN(
+    CHECK_RETURN_VK(
         create_buffer(
             device,
             mem_prop,
@@ -96,6 +94,6 @@ VkResult create_model(
             &out->index
         )
     );
-    CHECK_RETURN(map_memory(device, out->vertex.memory, (void *)vtxs, vtxs_size));
-    CHECK_RETURN(map_memory(device, out->index.memory, (void *)idxs, idxs_size));
+    CHECK_RETURN_VK(map_memory(device, out->vertex.memory, (void *)vtxs, vtxs_size));
+    CHECK_RETURN_VK(map_memory(device, out->index.memory, (void *)idxs, idxs_size));
 }
