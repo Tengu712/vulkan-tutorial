@@ -5,11 +5,15 @@ opt=-lglfw -lvulkan -lm
 cln=rm -rf ./build/a.out ./build/*.spv
 
 ifeq ($(OS),Windows_NT)
-	out=./build/a.exe
-	opt=-L./build/ -lglfw3 -lvulkan-1
-	cln=del .\build\a.exe .\build\*.spv
+    out=./build/a.exe
+    opt=-L./build/ -lglfw3 -lvulkan-1
+    cln=del .\build\a.exe .\build\*.spv
 else ifeq ($(shell type lsb_release > /dev/null 2>&1 && lsb_release -i -s),Ubuntu)
-	opt=-lglfw3 -lvulkan -lm
+    opt=-lglfw3 -lvulkan -lm
+endif
+
+ifneq ($(RELEASE),)
+    opt+=-D RELEASE_BUILD
 endif
 
 00:

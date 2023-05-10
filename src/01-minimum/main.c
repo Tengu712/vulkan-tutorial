@@ -45,6 +45,7 @@ int main() {
     }
 
     // debug
+    // NOTE: Vulkanのバリデーションレイヤーのコールバック関数を設定する。
     SET_VULKAN_DEBUG_CALLBACK(instance);
 
     // mainloop

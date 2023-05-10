@@ -690,10 +690,10 @@ int main() {
                 0.0f, 0.0f, 320.0f, 1.0f,
             },
             {
-                div_tanpov,                     0.0f,                         0.0f, 0.0f,
-                      0.0f, div_tanpov * 4.0f / 3.0f,                         0.0f, 0.0f,
-                      0.0f,                     0.0f,          1000.0f * div_depth, 1.0f,
-                      0.0f,                     0.0f, 100.0f * 1000.0f * div_depth, 0.0f,
+                div_tanpov,                     0.0f,                          0.0f, 0.0f,
+                      0.0f, div_tanpov * 4.0f / 3.0f,                          0.0f, 0.0f,
+                      0.0f,                     0.0f,           1000.0f * div_depth, 1.0f,
+                      0.0f,                     0.0f, -100.0f * 1000.0f * div_depth, 0.0f,
             },
         };
         CHECK_VK(
@@ -852,7 +852,7 @@ int main() {
     };
     PushConstant pc_square = {
         { 320.0f, 320.0f, 1.0f, 0.0f },
-        { 0.0f, 0.0f, 0.0f, 0.0f },
+        { 3.1415f / 6.0f, 0.0f, 0.0f, 0.0f },
         { 0.0f, 0.0f, 0.0f, 0.0f },
     };
     while (1) {

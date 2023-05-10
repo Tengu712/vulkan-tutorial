@@ -2,7 +2,7 @@
 
 #include <string.h>
 
-int32_t get_memory_type_index(
+static int32_t get_memory_type_index(
     const VkPhysicalDeviceMemoryProperties *mem_prop,
     const VkMemoryRequirements *reqs,
     VkMemoryPropertyFlags flags

@@ -9,7 +9,6 @@ int main() {
         const int res = glfwInit();
         CHECK(res == GLFW_TRUE, "failed to init GLFW.");
         // NOTE: コールバック関数の設定。
-        // NOTE: リリース時には不要なのでマクロで行う。詳細はcommon/を参照したい。
         SET_GLFW_ERROR_CALLBACK();
         // NOTE: GLFWで作成したウィンドウをVulkanで用いる場合、GLFW_CLIENT_APIをGLFW_NO_APIにする。
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
