@@ -9,7 +9,7 @@ VkResult create_image_texture_from_file(
     const VkCommandPool command_pool,
     const VkQueue queue,
     const char *path,
-    ImageTexture *out
+    Texture *out
 ) {
     // NOTE: 画像ファイルをstbで読み込む。
     int width = 0;
@@ -37,68 +37,19 @@ VkResult create_image_texture_from_file(
     );
     CHECK_RETURN_VK(map_memory(device, staging.memory, (void *)pixels, size));
 
-    // NOTE: イメージを作る。
-    VkImage image;
-    {
-        // TODO: もっと詳しく説明する。
-        // NOTE: イメージを作る。
-        const VkImageCreateInfo ci = {
-            VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-            NULL,
-            0,
-            VK_IMAGE_TYPE_2D,
+    // NOTE: Textureを初期化する。
+    CHECK_RETURN_VK(
+        create_texture(
+            device,
+            mem_prop,
             format,
-            { width, height, 1 },
-            1,
-            1,
-            VK_SAMPLE_COUNT_1_BIT,
-            VK_IMAGE_TILING_OPTIMAL,
+            width,
+            height,
             VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-            VK_SHARING_MODE_EXCLUSIVE,
-            0,
-            NULL,
-            VK_IMAGE_LAYOUT_UNDEFINED,
-        };
-        CHECK_RETURN_VK(vkCreateImage(device, &ci, NULL, &image));
-    }
-
-    // NOTE: メモリをアロケートして、イメージと関連付ける。
-    // NOTE: イメージ版のcreate_buffer。
-    VkDeviceMemory memory;
-    {
-        VkMemoryRequirements reqs;
-        vkGetImageMemoryRequirements(device, image, &reqs);
-        uint32_t memory_type_index = get_memory_type_index(mem_prop, &reqs, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-        const VkMemoryAllocateInfo ai = {
-            VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-            NULL,
-            reqs.size,
-            memory_type_index,
-        };
-        CHECK_RETURN_VK(vkAllocateMemory(device, &ai, NULL, &memory));
-        CHECK_RETURN_VK(vkBindImageMemory(device, image, memory, 0));
-    }
-
-    // NOTE: イメージビューを作る。
-    VkImageView view;
-    {
-        const VkImageViewCreateInfo ci = {
-            VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-            NULL,
-            0,
-            image,
-            VK_IMAGE_VIEW_TYPE_2D,
-            format,
-            {
-                VK_COMPONENT_SWIZZLE_R,
-                VK_COMPONENT_SWIZZLE_G,
-                VK_COMPONENT_SWIZZLE_B,
-                VK_COMPONENT_SWIZZLE_A,
-            },
-            { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 },
-        };
-        CHECK_RETURN_VK(vkCreateImageView(device, &ci, NULL, &view));
-    }
+            VK_IMAGE_ASPECT_COLOR_BIT,
+            out
+        )
+    );
 
     // NOTE: コマンドバッファを作成し、開始する。
     VkCommandBuffer command;
@@ -134,7 +85,7 @@ VkResult create_image_texture_from_file(
             VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
             VK_QUEUE_FAMILY_IGNORED,
             VK_QUEUE_FAMILY_IGNORED,
-            image,
+            out->image,
             { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 },
         };
         vkCmdPipelineBarrier(
@@ -157,7 +108,7 @@ VkResult create_image_texture_from_file(
             { 0, 0, 0 },
             { width, height, 1 },
         };
-        vkCmdCopyBufferToImage(command, staging.buffer, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copy_region);
+        vkCmdCopyBufferToImage(command, staging.buffer, out->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copy_region);
         image_memory_barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
         image_memory_barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
         image_memory_barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
@@ -176,11 +127,9 @@ VkResult create_image_texture_from_file(
         );
     }
 
-    // NOTE: コマンドの記録を終了する。
-    vkEndCommandBuffer(command);
-
-    // NOTE: コマンドを提出する。
+    // NOTE: コマンドの記録を終了して提出する。
     {
+        vkEndCommandBuffer(command);
         const VkSubmitInfo si = {
             VK_STRUCTURE_TYPE_SUBMIT_INFO,
             NULL,
@@ -203,11 +152,6 @@ VkResult create_image_texture_from_file(
     vkFreeMemory(device, staging.memory, NULL);
     vkDestroyBuffer(device, staging.buffer, NULL);
     stbi_image_free((void *)pixels);
-
-    // NOTE: 結果を格納する。
-    out->image = image;
-    out->view = view;
-    out->memory = memory;
 
     return VK_SUCCESS;
 }

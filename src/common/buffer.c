@@ -55,6 +55,76 @@ VkResult create_buffer(
     return VK_SUCCESS;
 }
 
+VkResult create_texture(
+    const VkDevice device,
+    const VkPhysicalDeviceMemoryProperties *mem_prop,
+    VkFormat format,
+    uint32_t width,
+    uint32_t height,
+    VkImageUsageFlags usage,
+    VkImageAspectFlags aspect,
+    Texture *out
+) {
+    // NOTE: イメージを作る。
+    {
+        const VkImageCreateInfo ci = {
+            VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+            NULL,
+            0,
+            VK_IMAGE_TYPE_2D,
+            format,
+            { width, height, 1 },
+            1,
+            1,
+            VK_SAMPLE_COUNT_1_BIT,
+            VK_IMAGE_TILING_OPTIMAL,
+            usage,
+            VK_SHARING_MODE_EXCLUSIVE,
+            0,
+            NULL,
+            VK_IMAGE_LAYOUT_UNDEFINED,
+        };
+        CHECK_RETURN_VK(vkCreateImage(device, &ci, NULL, &out->image));
+    }
+
+    // NOTE: メモリをアロケートして、イメージと関連付ける。
+    {
+        VkMemoryRequirements reqs;
+        vkGetImageMemoryRequirements(device, out->image, &reqs);
+        uint32_t memory_type_index = get_memory_type_index(mem_prop, &reqs, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+        const VkMemoryAllocateInfo ai = {
+            VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+            NULL,
+            reqs.size,
+            memory_type_index,
+        };
+        CHECK_RETURN_VK(vkAllocateMemory(device, &ai, NULL, &out->memory));
+        CHECK_RETURN_VK(vkBindImageMemory(device, out->image, out->memory, 0));
+    }
+
+    // NOTE: イメージビューを作る。
+    {
+        const VkImageViewCreateInfo ci = {
+            VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+            NULL,
+            0,
+            out->image,
+            VK_IMAGE_VIEW_TYPE_2D,
+            format,
+            {
+                VK_COMPONENT_SWIZZLE_R,
+                VK_COMPONENT_SWIZZLE_G,
+                VK_COMPONENT_SWIZZLE_B,
+                VK_COMPONENT_SWIZZLE_A,
+            },
+            { aspect, 0, 1, 0, 1 },
+        };
+        CHECK_RETURN_VK(vkCreateImageView(device, &ci, NULL, &out->view));
+    }
+
+    return VK_SUCCESS;
+}
+
 VkResult map_memory(const VkDevice device, const VkDeviceMemory device_memory, const void *data, int32_t size) {
     void *p;
     CHECK_RETURN_VK(vkMapMemory(device, device_memory, 0, VK_WHOLE_SIZE, 0, &p));

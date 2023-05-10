@@ -5,7 +5,6 @@
 // A struct for vertex input data.
 typedef struct Vertex_t {
     float pos[3];
-    // NOTE: 各頂点にUV座標を指定する。
     float uv[2];
 } Vertex;
 
@@ -219,6 +218,8 @@ int main() {
 
     // render pass
     VkRenderPass render_pass;
+    const uint32_t render_pass_attachments_count = 2; // NOTE: アタッチメントを増やすので。
+    const VkFormat depth_format = VK_FORMAT_D32_SFLOAT; // NOTE: デプスバッファ作成時で使うので。
     {
         const VkAttachmentDescription attachment_descs[] = {
             {
@@ -232,12 +233,30 @@ int main() {
                 VK_IMAGE_LAYOUT_UNDEFINED,
                 VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
             },
+            // NOTE: デプスバッファを設定する。
+            {
+                0,
+                depth_format,
+                VK_SAMPLE_COUNT_1_BIT,
+                VK_ATTACHMENT_LOAD_OP_CLEAR,
+                VK_ATTACHMENT_STORE_OP_STORE,
+                VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+                VK_ATTACHMENT_STORE_OP_DONT_CARE,
+                VK_IMAGE_LAYOUT_UNDEFINED,
+                VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+            },
         };
-        const VkAttachmentReference attachment_refs[] = {
+        const VkAttachmentReference color_refs[] = {
             {
                 0,
                 VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
             },
+        };
+        // NOTE: デプスバッファの参照を設定する。
+        // NOTE: 各サブパスに一つ設定するため、一つ。
+        const VkAttachmentReference depth_ref = {
+            1,
+            VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
         };
         const VkSubpassDescription subpass_descs[] = {
             {
@@ -246,25 +265,56 @@ int main() {
                 0,
                 NULL,
                 1,
-                attachment_refs,
+                color_refs,
                 NULL,
-                NULL,
+                &depth_ref, // NOTE: ここも忘れずに。
                 0,
                 NULL,
+            },
+        };
+        // NOTE: 
+        const VkSubpassDependency dependencies[] = {
+            {
+                0,
+                0,
+                VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+                VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+                0,
+                VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+                VK_DEPENDENCY_BY_REGION_BIT,
             },
         };
         const VkRenderPassCreateInfo ci = {
             VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
             NULL,
             0,
-            1,
+            2, // NOTE: 忘れずに。
             attachment_descs,
             1,
             subpass_descs,
-            0,
-            NULL,
+            1,
+            dependencies,
         };
         CHECK_VK(vkCreateRenderPass(device, &ci, NULL, &render_pass), "failed to create a render pass.");
+    }
+
+    // depth buffer
+    // NOTE: 
+    Texture *depth_buffers = (Texture *)malloc(sizeof(Texture) * image_views_cnt);
+    for (int i = 0; i < image_views_cnt; ++i) {
+        CHECK_VK(
+            create_texture(
+                device,
+                &phys_device_memory_prop,
+                depth_format,
+                surface_capabilities.currentExtent.width,
+                surface_capabilities.currentExtent.height,
+                VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+                VK_IMAGE_ASPECT_DEPTH_BIT,
+                &depth_buffers[i]
+            ),
+            "failed to create a depth buffer."
+        );
     }
 
     // framebuffers
@@ -275,7 +325,7 @@ int main() {
             NULL,
             0,
             render_pass,
-            1,
+            render_pass_attachments_count,
             NULL,
             surface_capabilities.currentExtent.width,
             surface_capabilities.currentExtent.height,
@@ -283,7 +333,8 @@ int main() {
         };
         framebuffers = (VkFramebuffer *)malloc(sizeof(VkFramebuffer) * image_views_cnt);
         for (int32_t i = 0; i < image_views_cnt; ++i) {
-            ci.pAttachments = &image_views[i];
+            VkImageView attachments[] = { image_views[i], depth_buffers[i].view };
+            ci.pAttachments = attachments;
             CHECK_VK(vkCreateFramebuffer(device, &ci, NULL, &framebuffers[i]), "failed to create a framebuffer.");
         }
     }
@@ -349,7 +400,6 @@ int main() {
     }
 
     // sampler
-    // NOTE: サンプラーを作る。
     VkSampler sampler;
     {
         const VkSamplerCreateInfo ci = {
@@ -389,8 +439,6 @@ int main() {
                 VK_SHADER_STAGE_VERTEX_BIT,
                 NULL,
             },
-            // NOTE: サンプラーをディスクリプタセットのレイアウトに追加する。
-            // NOTE: フラグメントシェーダに関連付ける。
             {
                 1,
                 VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
@@ -483,8 +531,6 @@ int main() {
         };
         const VkVertexInputAttributeDescription vert_inp_attr_dcs[] = {
             { 0, 0, VK_FORMAT_R32G32B32_SFLOAT, 0 },
-            // NOTE: UV座標を追加する。
-            // NOTE: これ自動化できないの辛い……。
             { 1, 0, VK_FORMAT_R32G32_SFLOAT, sizeof(float) * 3 },
         };
         const VkPipelineVertexInputStateCreateInfo vert_inp_ci = {
@@ -493,7 +539,7 @@ int main() {
             0,
             1,
             vert_inp_binding_dcs,
-            2, // NOTE: ここも変える。
+            2,
             vert_inp_attr_dcs,
         };
 
@@ -560,6 +606,24 @@ int main() {
             VK_FALSE,
         };
 
+        // depth stencil
+        // TODO: 
+        // NOTE: デプス/ステンシルテストの設定をする。
+        const VkPipelineDepthStencilStateCreateInfo depth_stencil_ci = {
+            VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
+            NULL,
+            0,
+            VK_TRUE,
+            VK_TRUE,
+            VK_COMPARE_OP_LESS_OR_EQUAL,
+            VK_FALSE,
+            VK_FALSE,
+            { 0 },
+            { 0 },
+            0.0f,
+            0.0f,
+        };
+
         // color blend
         const VkPipelineColorBlendAttachmentState color_blend_states[] = {
             {
@@ -598,7 +662,7 @@ int main() {
                 &viewport_ci,
                 &raster_ci,
                 &multisample_ci,
-                NULL,
+                &depth_stencil_ci, // NOTE: ここも忘れずに。
                 &color_blend_ci,
                 NULL,
                 pipeline_layout,
@@ -617,6 +681,7 @@ int main() {
     {
         // camera
         const float div_tanpov = 1.0f / tan(3.1415f / 4.0f);
+        const float div_depth = 1.0f / (1000.0f - 100.0f);
         CameraData camera = {
             {
                 1.0f, 0.0f, 0.0f, 0.0f,
@@ -625,10 +690,10 @@ int main() {
                 0.0f, 0.0f, 320.0f, 1.0f,
             },
             {
-                div_tanpov,                     0.0f, 0.0f, 0.0f,
-                      0.0f, div_tanpov * 4.0f / 3.0f, 0.0f, 0.0f,
-                      0.0f,                     0.0f, 1.0f, 1.0f,
-                      0.0f,                     0.0f, 0.0f, 0.0f,
+                div_tanpov,                     0.0f,                         0.0f, 0.0f,
+                      0.0f, div_tanpov * 4.0f / 3.0f,                         0.0f, 0.0f,
+                      0.0f,                     0.0f,          1000.0f * div_depth, 1.0f,
+                      0.0f,                     0.0f, 100.0f * 1000.0f * div_depth, 0.0f,
             },
         };
         CHECK_VK(
@@ -652,8 +717,6 @@ int main() {
             "failed to map a camera data to a uniform buffer."
         );
         // image
-        // NOTE: イメージテクスチャを作る。
-        // NOTE: 汎用性があるロジックであるため、関数に切り分けた。common/image.cで定義されている。
         CHECK_VK(
             create_image_texture_from_file(device, &phys_device_memory_prop, command_pool, queue, "../img/shape.png", &img_tex),
             "failed to create a image texture."
@@ -664,7 +727,6 @@ int main() {
             0,
             VK_WHOLE_SIZE,
         };
-        // NOTE: イメージテクスチャをディスクリプタセットに設定する。
         const VkDescriptorImageInfo ii = {
             sampler,
             img_tex.view,
@@ -683,7 +745,6 @@ int main() {
                 &bi,
                 NULL,
             },
-            // NOTE: ここも追加。
             {
                 VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
                 NULL,
@@ -700,17 +761,73 @@ int main() {
         vkUpdateDescriptorSets(device, 2, write_desc_sets, 0, NULL);
     }
 
-    // model
-    Model model;
+    // models
+    Model cube;
     {
-        // NOTE: UV座標を指定する。左上原点であることに注意する。
-        const Vertex vtxs[4] = {
-            { { -0.5f,  0.5f, 0.0f }, { 0.0f, 1.0f } },
-            { {  0.5f,  0.5f, 0.0f }, { 1.0f, 1.0f } },
-            { {  0.5f, -0.5f, 0.0f }, { 1.0f, 0.0f } },
-            { { -0.5f, -0.5f, 0.0f }, { 0.0f, 0.0f } },
+        const Vertex vtxs[24] = {
+            // NOTE: 前
+            { { -0.5f,  0.5f, -0.5f }, { 0.0f, 1.0f } },
+            { {  0.5f,  0.5f, -0.5f }, { 1.0f, 1.0f } },
+            { {  0.5f, -0.5f, -0.5f }, { 1.0f, 0.0f } },
+            { { -0.5f, -0.5f, -0.5f }, { 0.0f, 0.0f } },
+            // NOTE: 奥
+            { {  0.5f,  0.5f,  0.5f }, { 0.0f, 1.0f } },
+            { { -0.5f,  0.5f,  0.5f }, { 1.0f, 1.0f } },
+            { { -0.5f, -0.5f,  0.5f }, { 1.0f, 0.0f } },
+            { {  0.5f, -0.5f,  0.5f }, { 0.0f, 0.0f } },
+            // NOTE: 左
+            { { -0.5f,  0.5f,  0.5f }, { 0.0f, 1.0f } },
+            { { -0.5f,  0.5f, -0.5f }, { 1.0f, 1.0f } },
+            { { -0.5f, -0.5f, -0.5f }, { 1.0f, 0.0f } },
+            { { -0.5f, -0.5f,  0.5f }, { 0.0f, 0.0f } },
+            // NOTE: 右
+            { {  0.5f,  0.5f, -0.5f }, { 0.0f, 1.0f } },
+            { {  0.5f,  0.5f,  0.5f }, { 1.0f, 1.0f } },
+            { {  0.5f, -0.5f,  0.5f }, { 1.0f, 0.0f } },
+            { {  0.5f, -0.5f, -0.5f }, { 0.0f, 0.0f } },
+            // NOTE: 上
+            { { -0.5f, -0.5f, -0.5f }, { 0.0f, 1.0f } },
+            { {  0.5f, -0.5f, -0.5f }, { 1.0f, 1.0f } },
+            { {  0.5f, -0.5f,  0.5f }, { 1.0f, 0.0f } },
+            { { -0.5f, -0.5f,  0.5f }, { 0.0f, 0.0f } },
+            // NOTE: 下
+            { { -0.5f,  0.5f,  0.5f }, { 0.0f, 1.0f } },
+            { {  0.5f,  0.5f,  0.5f }, { 1.0f, 1.0f } },
+            { {  0.5f,  0.5f, -0.5f }, { 1.0f, 0.0f } },
+            { { -0.5f,  0.5f, -0.5f }, { 0.0f, 0.0f } },
         };
-        const uint32_t idxs[6] = { 0, 1, 2, 0, 2, 3 };
+        const uint32_t idxs[36] = {
+             0,  1,  2,  0,  2,  3,
+             4,  5,  6,  4,  6,  7,
+             8,  9, 10,  8, 10, 11,
+            12, 13, 14, 12, 14, 15,
+            16, 17, 18, 16, 18, 19,
+            20, 21, 22, 20, 22, 23,
+        };
+        CHECK_VK(
+            create_model(
+                device,
+                &phys_device_memory_prop,
+                36,
+                sizeof(Vertex) * 24,
+                (const float *)vtxs,
+                (const uint32_t *)idxs,
+                &cube
+            ),
+            "failed to create a model."
+        );
+    }
+    Model square;
+    {
+        const Vertex vtxs[] = {
+            { { -0.5f,  0.5f, -0.5f }, { 0.0f, 1.0f } },
+            { {  0.5f,  0.5f, -0.5f }, { 1.0f, 1.0f } },
+            { {  0.5f, -0.5f, -0.5f }, { 1.0f, 0.0f } },
+            { { -0.5f, -0.5f, -0.5f }, { 0.0f, 0.0f } },
+        };
+        const uint32_t idxs[] = {
+            0, 1, 2, 0, 2, 3,
+        };
         CHECK_VK(
             create_model(
                 device,
@@ -719,7 +836,7 @@ int main() {
                 sizeof(Vertex) * 4,
                 (const float *)vtxs,
                 (const uint32_t *)idxs,
-                &model
+                &square
             ),
             "failed to create a model."
         );
@@ -728,7 +845,12 @@ int main() {
     // mainloop
     uint32_t pre_image_idx = 0;
     uint32_t cur_image_idx = 0;
-    PushConstant push_constant = {
+    PushConstant pc_cube = {
+        { 160.0f, 160.0f, 160.0f, 0.0f },
+        { 0.0f, 0.0f, 0.0f, 0.0f },
+        { 0.0f, 0.0f, 0.0f, 0.0f },
+    };
+    PushConstant pc_square = {
         { 320.0f, 320.0f, 1.0f, 0.0f },
         { 0.0f, 0.0f, 0.0f, 0.0f },
         { 0.0f, 0.0f, 0.0f, 0.0f },
@@ -737,6 +859,10 @@ int main() {
         if (glfwWindowShouldClose(window))
             break;
         glfwPollEvents();
+
+        pc_cube.rot[0] += 0.01;
+        pc_cube.rot[1] += 0.01;
+        pc_cube.rot[2] += 0.01;
 
         // prepare
         WARN_VK(vkAcquireNextImageKHR(device, swapchain, UINT64_MAX, frame_data[pre_image_idx].semaphore, VK_NULL_HANDLE, &cur_image_idx), "failed to acquire a next image index.");
@@ -753,23 +879,26 @@ int main() {
             NULL,
         };
         WARN_VK(vkBeginCommandBuffer(command, &cmd_bi), "failed to begin to record commands to render.");
-        const VkClearValue clear_value = {{ SCREEN_CLEAR_RGBA }};
+        const VkClearValue clear_values[] = {
+            { SCREEN_CLEAR_RGBA },
+            { 1.0f, 0.0f }, // NOTE: デプスバッファのクリア値。
+        };
         const VkRenderPassBeginInfo rp_bi = {
             VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
             NULL,
             render_pass,
             framebuffers[cur_image_idx],
             { {0, 0}, surface_capabilities.currentExtent },
-            1,
-            &clear_value,
+            2, // NOTE: 忘れずに。
+            clear_values,
         };
         vkCmdBeginRenderPass(command, &rp_bi, VK_SUBPASS_CONTENTS_INLINE);
         vkCmdBindPipeline(command, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
 
-        // draw
-        const VkDeviceSize offset = 0;
-        vkCmdBindVertexBuffers(command, 0, 1, &model.vertex.buffer, &offset);
-        vkCmdBindIndexBuffer(command, model.index.buffer, offset, VK_INDEX_TYPE_UINT32);
+        // draw a cube
+        const VkDeviceSize offset1 = 0;
+        vkCmdBindVertexBuffers(command, 0, 1, &cube.vertex.buffer, &offset1);
+        vkCmdBindIndexBuffer(command, cube.index.buffer, offset1, VK_INDEX_TYPE_UINT32);
         vkCmdBindDescriptorSets(
             command,
             VK_PIPELINE_BIND_POINT_GRAPHICS,
@@ -780,8 +909,25 @@ int main() {
             0,
             NULL
         );
-        vkCmdPushConstants(command, pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PushConstant), (const void *)&push_constant);
-        vkCmdDrawIndexed(command, model.index_cnt, 1, 0, 0, 0);
+        vkCmdPushConstants(command, pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PushConstant), (const void *)&pc_cube);
+        vkCmdDrawIndexed(command, cube.index_cnt, 1, 0, 0, 0);
+
+        // draw a square
+        const VkDeviceSize offset2 = 0;
+        vkCmdBindVertexBuffers(command, 0, 1, &square.vertex.buffer, &offset2);
+        vkCmdBindIndexBuffer(command, square.index.buffer, offset2, VK_INDEX_TYPE_UINT32);
+        vkCmdBindDescriptorSets(
+            command,
+            VK_PIPELINE_BIND_POINT_GRAPHICS,
+            pipeline_layout,
+            0,
+            1,
+            &descriptor_set,
+            0,
+            NULL
+        );
+        vkCmdPushConstants(command, pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PushConstant), (const void *)&pc_square);
+        vkCmdDrawIndexed(command, square.index_cnt, 1, 0, 0, 0);
 
         // end
         vkCmdEndRenderPass(command);
@@ -819,10 +965,14 @@ int main() {
 
     // termination
     vkDeviceWaitIdle(device);
-    vkFreeMemory(device, model.vertex.memory, NULL);
-    vkFreeMemory(device, model.index.memory, NULL);
-    vkDestroyBuffer(device, model.vertex.buffer, NULL);
-    vkDestroyBuffer(device, model.index.buffer, NULL);
+    vkFreeMemory(device, square.vertex.memory, NULL);
+    vkFreeMemory(device, square.index.memory, NULL);
+    vkDestroyBuffer(device, square.vertex.buffer, NULL);
+    vkDestroyBuffer(device, square.index.buffer, NULL);
+    vkFreeMemory(device, cube.vertex.memory, NULL);
+    vkFreeMemory(device, cube.index.memory, NULL);
+    vkDestroyBuffer(device, cube.vertex.buffer, NULL);
+    vkDestroyBuffer(device, cube.index.buffer, NULL);
     vkFreeMemory(device, uniform_buffer.memory, NULL);
     vkDestroyBuffer(device, uniform_buffer.buffer, NULL);
     vkFreeMemory(device, img_tex.memory, NULL);
@@ -841,6 +991,9 @@ int main() {
         vkFreeCommandBuffers(device, command_pool, 1, &frame_data[i].command_buffer);
         vkDestroyFramebuffer(device, framebuffers[i], NULL);
         vkDestroyImageView(device, image_views[i], NULL);
+        vkFreeMemory(device, depth_buffers[i].memory, NULL);
+        vkDestroyImageView(device, depth_buffers[i].view, NULL);
+        vkDestroyImage(device, depth_buffers[i].image, NULL);
     }
     vkDestroyRenderPass(device, render_pass, NULL);
     vkDestroySwapchainKHR(device, swapchain, NULL);

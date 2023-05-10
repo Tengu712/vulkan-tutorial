@@ -67,11 +67,11 @@ typedef struct CameraData_t {
     float proj[16];
 } CameraData;
 
-typedef struct ImageTexture_t {
+typedef struct Texture_t {
     VkImage image;
     VkImageView view;
     VkDeviceMemory memory;
-} ImageTexture;
+} Texture;
 
 #ifndef RELEASE_BUILD
     void set_glfw_error_callback();
@@ -94,6 +94,16 @@ VkResult create_buffer(
     VkMemoryPropertyFlags flags,
     Buffer *out
 );
+VkResult create_texture(
+    const VkDevice device,
+    const VkPhysicalDeviceMemoryProperties *mem_prop,
+    VkFormat format,
+    uint32_t width,
+    uint32_t height,
+    VkImageUsageFlags usage,
+    VkImageAspectFlags aspect,
+    Texture *out
+);
 VkResult map_memory(const VkDevice device, const VkDeviceMemory device_memory, const void *data, int32_t size);
 VkResult create_model(
     const VkDevice device,
@@ -111,5 +121,5 @@ VkResult create_image_texture_from_file(
     const VkCommandPool command_pool,
     const VkQueue queue,
     const char *path,
-    ImageTexture *out
+    Texture *out
 );

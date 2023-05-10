@@ -36,5 +36,9 @@ endif
 	glslc -o ./build/shader.vert.spv ./src/07-image/shader.vert
 	glslc -o ./build/shader.frag.spv ./src/07-image/shader.frag
 	gcc -o $(out) ./src/07-image/main.c ./src/common/debug.c ./src/common/read_bin.c ./src/common/buffer.c ./src/common/image.c $(opt)
+08:
+	glslc -o ./build/shader.vert.spv ./src/08-cube/shader.vert
+	glslc -o ./build/shader.frag.spv ./src/08-cube/shader.frag
+	gcc -o $(out) ./src/08-cube/main.c ./src/common/debug.c ./src/common/read_bin.c ./src/common/buffer.c ./src/common/image.c $(opt)
 clean:
 	$(cln)
