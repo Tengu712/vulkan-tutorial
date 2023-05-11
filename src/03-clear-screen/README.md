@@ -2,7 +2,7 @@
 
 ## Outline
 
-![](/img/03-clear-screen.png)
+![](https://skdassoc.com/img/outer/Vulkan-Tutorial-03-clear-screen.png)
 
 画面を一色にクリアする。
 

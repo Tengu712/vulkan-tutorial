@@ -24,7 +24,7 @@ VkResult create_buffer(
     Buffer *out
 ) {
     // create a buffer
-    VkBufferCreateInfo buffer_create_info = {
+    const VkBufferCreateInfo ci = {
         VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
         NULL,
         0,
@@ -33,21 +33,20 @@ VkResult create_buffer(
         VK_SHARING_MODE_EXCLUSIVE,
         0,
     };
-    CHECK_RETURN_VK(vkCreateBuffer(device, &buffer_create_info, NULL, &out->buffer));
+    CHECK_RETURN_VK(vkCreateBuffer(device, &ci, NULL, &out->buffer));
 
     // get memory requirements
     VkMemoryRequirements reqs;
     vkGetBufferMemoryRequirements(device, out->buffer, &reqs);
 
     // allocate memory
-    VkMemoryAllocateInfo allocate_info = {
+    const VkMemoryAllocateInfo ai = {
         VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
         NULL,
         reqs.size,
-        0,
+        get_memory_type_index(mem_prop, &reqs, flags),
     };
-    allocate_info.memoryTypeIndex = get_memory_type_index(mem_prop, &reqs, flags);
-    CHECK_RETURN_VK(vkAllocateMemory(device, &allocate_info, NULL, &out->memory));
+    CHECK_RETURN_VK(vkAllocateMemory(device, &ai, NULL, &out->memory));
 
     // bind buffer with memory
     CHECK_RETURN_VK(vkBindBufferMemory(device, out->buffer, out->memory, 0));
@@ -91,12 +90,11 @@ VkResult create_texture(
     {
         VkMemoryRequirements reqs;
         vkGetImageMemoryRequirements(device, out->image, &reqs);
-        uint32_t memory_type_index = get_memory_type_index(mem_prop, &reqs, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
         const VkMemoryAllocateInfo ai = {
             VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
             NULL,
             reqs.size,
-            memory_type_index,
+            get_memory_type_index(mem_prop, &reqs, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT),
         };
         CHECK_RETURN_VK(vkAllocateMemory(device, &ai, NULL, &out->memory));
         CHECK_RETURN_VK(vkBindImageMemory(device, out->image, out->memory, 0));

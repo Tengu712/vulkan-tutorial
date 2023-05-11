@@ -144,7 +144,7 @@ VkResult create_image_texture_from_file(
         CHECK_RETURN_VK(vkQueueSubmit(queue, 1, &si, VK_NULL_HANDLE));
     }
 
-    // NOTE: コマンドが処理されるのを待つ。フェンスを使えば全体を止めずに待機できる。
+    // NOTE: コマンドが処理されるのを待つ。
     vkDeviceWaitIdle(device);
 
     // NOTE: 不要なリソースを解放する。
