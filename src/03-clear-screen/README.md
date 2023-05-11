@@ -2,6 +2,8 @@
 
 ## Outline
 
+![](/img/03-clear-screen.png)
+
 画面を一色にクリアする。
 
 ## Additions
