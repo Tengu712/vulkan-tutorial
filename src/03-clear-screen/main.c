@@ -105,6 +105,7 @@ int main() {
 
     // queue
     // NOTE: キューファミリの中の最初のキューを選択する。
+    // NOTE: コマンドを提出する際に必要なので、ここで。
     VkQueue queue;
     vkGetDeviceQueue(device, queue_family_index, 0, &queue);
 
@@ -193,7 +194,8 @@ int main() {
     }
 
     // image views
-    // NOTE: 描画先であるイメージビューを作成する。
+    // NOTE: スワップイメージチェーンのイメージビューを作成する。
+    // NOTE: このイメージビューは描画先となる。
     uint32_t image_views_cnt;
     VkImageView *image_views;
     {
@@ -210,8 +212,7 @@ int main() {
             VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
             NULL,
             0,
-            // NOTE: ここにイメージが設定される。
-            NULL,
+            NULL, // NOTE: ここにイメージが設定される。
             VK_IMAGE_VIEW_TYPE_2D,
             surface_format.format,
             {
@@ -221,7 +222,7 @@ int main() {
                 VK_COMPONENT_SWIZZLE_A,
             },
             // NOTE: イメージビューのアスペクトやミップマップやレイヤーを設定できる。
-            // NOTE: アスペクトはカラーのみ。
+            // NOTE: アスペクトはCOLOR_BIT。たとえば、デプスバッファを作るときは、デプスバッファのイメージビュー作成時にDEPTH_BITを指定する。
             { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 },
         };
         for (int32_t i = 0; i < images_cnt; ++i) {
@@ -236,8 +237,10 @@ int main() {
     // NOTE: 描画工程の全体像であるレンダーパスを作成する。
     // NOTE: 余程妙なことをしなければ単純なレンダーパスで十分？
     VkRenderPass render_pass;
+    const uint32_t render_pass_attachments_count = 1;
     {
         // NOTE: アタッチメントの説明。
+        // NOTE: アタッチメントとは、端的に言って描画先。たとえばデプステストを行う場合は、デプスバッファも指定する。
         const VkAttachmentDescription attachment_descs[] = {
             {
                 0,
@@ -258,6 +261,7 @@ int main() {
                 VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, // NOTE: アタッチメントのレイアウト。
             },
         };
+        // TODO: サブパス自体、およびメンバの解説。
         // NOTE: サブパスの説明。
         const VkSubpassDescription subpass_descs[] = {
             {
@@ -278,10 +282,11 @@ int main() {
             VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
             NULL,
             0,
-            1,
+            render_pass_attachments_count,
             attachment_descs,
             1,
             subpass_descs,
+            // TODO: サブパス依存の解説。
             // NOTE: 単純なレンダーパスなのでサブパス依存はなし。
             0,
             NULL,
@@ -298,8 +303,9 @@ int main() {
             NULL,
             0,
             render_pass,
-            1,
-            // NOTE: ここにイメージビューが設定される。
+            render_pass_attachments_count,
+            // NOTE: ここにイメージビューが指定される。
+            // NOTE: 今回はカラーアタッチメントだけだが、デプステストを行う場合はデプスバッファのイメージビューも指定する。
             NULL,
             surface_capabilities.currentExtent.width,
             surface_capabilities.currentExtent.height,
@@ -374,9 +380,12 @@ int main() {
             NULL,
         };
         WARN_VK(vkBeginCommandBuffer(command, &cmd_bi), "failed to begin to record commands to render.");
-        // NOTE: レンダーパスを開始する。
         // NOTE: 画面のクリア色を指定する。
-        const VkClearValue clear_value = {{ SCREEN_CLEAR_RGBA }};
+        // NOTE: 配列であるのは、デプスバッファを利用する場合はそのクリア値も指定することになるため。
+        const VkClearValue clear_values[] = {
+            {{ SCREEN_CLEAR_RGBA }},
+        };
+        // NOTE: レンダーパスを開始する。
         const VkRenderPassBeginInfo rp_bi = {
             VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
             NULL,
@@ -384,7 +393,7 @@ int main() {
             framebuffers[cur_image_idx],
             { {0, 0}, surface_capabilities.currentExtent },
             1,
-            &clear_value,
+            clear_values,
         };
         vkCmdBeginRenderPass(command, &rp_bi, VK_SUBPASS_CONTENTS_INLINE);
 

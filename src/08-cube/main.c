@@ -288,7 +288,7 @@ int main() {
             VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
             NULL,
             0,
-            2, // NOTE: 忘れずに。
+            render_pass_attachments_count,
             attachment_descs,
             1,
             subpass_descs,

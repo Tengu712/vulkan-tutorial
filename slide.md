@@ -25,48 +25,49 @@ style: |
   strong {
     color: red;
   }
+  img[alt~="center"] {
+    display: block;
+    margin: 1em auto;
+  }
 ---
 
 <!-- _class: top -->
-# Vulkan Tutorial Better Than ChatGPT
+# Simplest Vulkan Tutorial
 
 ## 天狗(Tengu712)
 
 ---
 
 <!-- _class: section -->
-# おことわり
+# はじめに
 
 ---
 
-# 本スライドのコンセプト
+# コンセプト
 
-**網羅率を代償に、正しさを持って速習すること。**
+**網羅率を代償に、正しさを持って、簡単に速習すること。**
 
-雑に新しいものを学ぶならChatGPTを用いるのが早い。
-また、Vulkanは文献が乏しいながら、皆無というわけではない。
+他のチュートリアルでは軽視されがちな「理論」の部分に重点を置く。
+読みやすく、わかりやすく、試しやすい、を意識している。
 
-しかし、ChatGPTは勿論嘘を吐くし、
-解説書は specific なプログラムを組む場合がある(一つの物体しか扱わないとか)。
-
-本スライドでは、それらに比べ、正しく・一般的な理解を促進したい。
+当スライドを見てもプログラムは組めない。
+当スライドを見て、プログラムを俯瞰できるようにしてほしい。
 
 ---
 
-# 想定の対象
+# 想定の対象者層
 
-次の程度のリテラシーが大前提となっています：
-* C言語が分かる
+次の程度のリテラシーは欲しい：
+
+* C言語が読める
 * 行列の積が分かる
-* コンピュータアーキテクチャがある程度分かる
-* 「DirectX」とか「シェーダ」くらいは聞いたことがある
+* コンピュータアーキテクチャが少し分かる
 
 ---
 
 # サンプルコード
 
-本スライドには断片的にしか掲載しません。
-適宜以下のリンクを参照してください。
+本スライドには断片的にしか掲載しない。適宜以下のリンクを参照してほしい。
 https://github.com/Tengu712/Vulkan-Tutorial
 
 尚、**独特**なコーディング規則について、以下のよう：
@@ -76,17 +77,37 @@ https://github.com/Tengu712/Vulkan-Tutorial
 * ifの分岐後命令が一つかつbreak、continue、returnなら改行
 * 構造体の実体は初期化子で初期化
 * 初期化子内は余程短くない限り改行
+* 必要以上に関数・モジュール分割しない
 
 ---
 
 # 参考文献
 
-どのくらい参考したかはともかく、ぼくがVulkanを勉強する上で参考にした文献：
+どのくらい参考したかはともかく、ぼくがVulkanを勉強する上で参考にした公式文献を除く文献：
 
-* Fadis(FADIS PRESS)『3DグラフィクスAPI Vulkanを出来るだけやさしく解説する本』
-* すらりん(すらりんラボ)『Vulkan Programming Vol.1』
+* すらりん『Vulkan Programming Vol.1』
+* Fadis『3DグラフィクスAPI Vulkanを出来るだけやさしく解説する本』
+* きてらい「やっていくVulkan入門」
+* Alexander Overvoorde「VulkanTutorial」
+* vblanco20-1「VulkanGuide」
 
 局所的には、各頁に示す。
+
+---
+
+# RenderDoc
+
+グラフィックプログラミングをしていると、
+コンパイルエラーもランタイムエラーもないが映らない、
+なんてことがしょっちゅうある。
+
+RenderDocを使うと以下を確認できたりするため、利用すべき：
+
+* カラーバッファやデプスバッファ
+* 各ステートの設定
+* 各シェーダの入力と出力
+* デプステストの結果
+
 
 ---
 
@@ -100,11 +121,15 @@ https://github.com/Tengu712/Vulkan-Tutorial
 **グラフィックスAPI**の一種。
 OpenGLの後継。従来のAPIより低水準で自由。
 
+![center width:600](https://upload.wikimedia.org/wikipedia/commons/f/fe/Vulkan_logo.svg)
+
+![center width:600](https://upload.wikimedia.org/wikipedia/commons/0/0b/Khronos_Group_logo.svg)
+
 ---
 
 # グラフィックスAPIとは
 
-主に**レンダリング**を目的としたGPUを扱うための**API**。
+主に**レンダリング**を目的とした、GPUを扱うための**API**。
 
 「なぜAPIを介すのか？」
 GPUのアーキテクチャは非公開であることが多く、アセンブリを書くのが現実的でないから。
@@ -125,10 +150,7 @@ GPUのアーキテクチャは非公開であることが多く、アセンブ�
 
 # レンダリングパイプライン
 
-グラフィックスAPIによる、GPUの扱い方。
-従って、利用可不可はGPUのアーキテクチャにも依存する。
-
-多くは大雑把に以下のよう：
+描画対象を処理する工程。多くは大雑把に以下のよう：
 
 1. インプットアセンブラ
 2. ヴァーテックスシェーダ
@@ -141,8 +163,10 @@ GPUのアーキテクチャは非公開であることが多く、アセンブ�
 
 # Vulkanのレンダリングパイプライン
 
+概ね右の通り。
+
 参考元：
-https://www.khronos.org/files/vulkan11-reference-guide.pdf
+Khronos Group, Vulkan 1.1 Quick Reference
 
 ![bg right:65% height:95%](./img/vulkan-rendering-pipeline-diagram.svg)
 
@@ -156,27 +180,11 @@ https://www.khronos.org/files/vulkan11-reference-guide.pdf
 
 # プログラマは何をすればいいか
 
-Vulkanを**設定**して、Vulkanを介してGPUを扱う。
+**Vulkanに詳細な設定を与えて、Vulkanを介してGPUに計算させる。**
 
 難しいアルゴリズムを考える必要は皆無。とにかく仕様と睨めっこ。
 
 ---
 
-<!-- _class: section -->
-# 空のアプリ
-
----
-
-# ウィンドウ作成
-
-解説の都合上GLFWを用いる。
-普通、WindowsならWin32API、LinuxならXlibを用いる。
-
-GLFWとは、端的に、OpenGLを扱いやすくするためのライブラリ。
-Windows/Linux/macOSでウィンドウを作れる。
-
-GLFW：
-https://www.glfw.org/
-
----
+# イメージ図
 
