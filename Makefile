@@ -13,7 +13,7 @@ else ifeq ($(shell type lsb_release > /dev/null 2>&1 && lsb_release -i -s),Ubunt
 endif
 
 ifneq ($(RELEASE),)
-    opt+=-D RELEASE_BUILD
+    opt+=-D RELEASE
 endif
 
 00:
