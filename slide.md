@@ -60,7 +60,6 @@ math: mathjax
 
 次の程度のリテラシーは欲しい：
 
-* C言語が読める
 * 行列の積が分かる
 * コンピュータアーキテクチャが少し分かる
 
@@ -68,7 +67,7 @@ math: mathjax
 
 # サンプルコード
 
-本スライドには断片的にしか掲載しない。適宜以下のリンクを参照してほしい。
+本スライドには一切掲載しない。適宜以下のリンクを参照してほしい。
 https://github.com/Tengu712/Vulkan-Tutorial
 
 尚、**独特**なコーディング規則について、以下のよう：
@@ -91,8 +90,6 @@ https://github.com/Tengu712/Vulkan-Tutorial
 * きてらい「やっていくVulkan入門」
 * Alexander Overvoorde「VulkanTutorial」
 * vblanco20-1「VulkanGuide」
-
-局所的には、各頁に示す。
 
 ---
 
@@ -170,13 +167,13 @@ GPUのアーキテクチャは非公開であることが多く、アセンブ�
 参考元：
 Khronos Group, Vulkan 1.1 Quick Reference
 
-![bg right:65% height:95%](./img/vulkan-rendering-pipeline-diagram.svg)
+![bg right:65% height:95%](https://skdassoc.com/img/outer/Vulkan-Tutorial-rendering-pipeline-diagram.svg)
 
 ---
 
 # 今回扱う部分
 
-![bg right:65% height:95%](./img/vulkan-rendering-pipeline-diagram-in-tutorial.svg)
+![bg right:65% height:95%](https://skdassoc.com/img/outer/Vulkan-Tutorial-rendering-pipeline-diagram-in-tutorial.svg)
 
 ---
 
@@ -185,10 +182,6 @@ Khronos Group, Vulkan 1.1 Quick Reference
 **Vulkanに詳細な設定を与えて、Vulkanを介してGPUに計算させる。**
 
 難しいアルゴリズムを考える必要は皆無。とにかく仕様と睨めっこ。
-
----
-
-# イメージ図
 
 ---
 
@@ -349,11 +342,54 @@ Vulkanを用いて「フレームバッファ」に書き込むためには、
 ---
 
 <!-- _class: section -->
+# 頂点入力
+
+---
+
+# ポリゴンの作り方
+
+三角形を繋ぎ合わせてモデル全体を作る。
+
+頂点の結び方に種類があり、インプットアセンブラに設定する。主に以下：
+
+* TRIANGLE_LIST
+* TRIANGLE_STRIP
+* TRIANGLE_FAN
+
+![bg fit right:30%](https://skdassoc.com/img/outer/Vulkan-Tutorial-premitive-topology.svg)
+
+---
+
+# 頂点バッファとインデックスバッファ
+
+頂点情報を羅列した頂点バッファと
+頂点を結ぶ順番を羅列したインデックスバッファを
+インプットアセンブラに渡す。
+
+---
+
+# 頂点情報
+
+一つの頂点は複数の情報を持ちうる。
+
+* ローカル座標
+* UV座標
+* 法線ベクトル
+* 頂点色
+* 頂点ごとのパラメータ
+
+頂点シェーダへの入力となるため、データ構造を頂点シェーダに教えておく。
+
+---
+
+<!-- _class: section -->
 # 頂点シェーダ
 
 ---
 
 # 頂点シェーダ
+
+![center width:1000](https://skdassoc.com/img/outer/Vulkan-Tutorial-stages-vs.svg)
 
 レンダリングパイプラインのステージの一つ。
 
@@ -366,6 +402,9 @@ Vulkanでは、さらにSPIR-Vにコンパイルしたものを用いる。
 
 # 頂点座標変換
 
+Vulkanの扱う座標系をクリッピング座標系という。
+描画対象となる範囲は、$x,y$が$[-1,1]$、$z$が$[0,1]$。
+
 一般的に次の順で座標系に合わせて変換していく：
 
 1. ローカル座標系：モデル内の座標 (入力)
@@ -377,7 +416,7 @@ Vulkanでは、さらにSPIR-Vにコンパイルしたものを用いる。
 
 # ローカル座標
 
-ローカル座標を以下とする：
+ローカル座標および各変換後の座標を以下とする：
 
 $$
 \begin{bmatrix}
@@ -592,10 +631,10 @@ $$
 
 $$
 \begin{bmatrix}
-  1/width & 0 & 0 & 0\\
-  0 & 1/height & 0 & 0\\
-  0 & 0 & 1/depth & 0\\
-  0 & 0 & 0 & 1
+  1/\tan\theta & 0 & 0 & 0\\
+  0 & aspect/\tan\theta & 0 & 0\\
+  0 & 0 & \frac{far}{far-near} & \frac{-far\cdot near}{far-near}\\
+  0 & 0 & 1 & 0
 \end{bmatrix}
 \begin{bmatrix}
   x\\
@@ -605,17 +644,46 @@ $$
 \end{bmatrix}
 =
 \begin{bmatrix}
-  x/width\\
-  y/height\\
-  z/depth\\
-  1\\
+  x/\tan\theta\\
+  y\cdot aspect/\tan\theta\\
+  \frac{(z-near)far}{far-near}\\
+  z\\
 \end{bmatrix}
 $$
 
 ---
 
+# 注意点
+
+少なくともVulkan+GLSLでは、**列優先**なので、転置した状態でシェーダに渡す。
+
+```c
+// 普通の処理系
+float mat4x4[][] = {
+  { a11, a12, a13, a14 },
+  { a21, a22, a23, a24 },
+  { a31, a32, a33, a34 },
+  { a41, a42, a43, a44 },
+};
+// シェーダに渡したとき
+{ a11, a21, a31, a41, a12, a22, a32, ... }
+```
+
+---
+
 <!-- _class: section -->
-# Post 
+# 頂点シェーダ to フラグメントシェーダ
+
+---
+
+# 役割
+
+![center width:1000](https://skdassoc.com/img/outer/Vulkan-Tutorial-stages-vs-fs.svg)
+
+各頂点の計算から、各ピクセルの計算への移行。
+
+頂点シェーダからの出力の内、`stat`でない値の補完。
+
 
 ---
 
@@ -651,26 +719,92 @@ $p_x,p_y$がビューポート上の座標、$p_z$が深度値となる。
 
 ---
 
-# デプステスト
+# カリング
+
+裏面を向いているポリゴンを削除する。
+フラグメントシェーダの計算量を抑えるために行われる。
+
+表裏判定は、頂点の結ぶ向きが時計回りか反時計回りかで行う。
+
+OpenGL系では慣習的に反時計回りを表とする。
+
+![bg fit right:35%](https://skdassoc.com/img/outer/Vulkan-Tutorial-culling.svg)
 
 ---
 
-# 透視投影行列の罠
+# ラスタライズとマルチサンプル
+
+![center width:600](https://skdassoc.com/img/outer/Vulkan-Tutorial-rasterize.svg)
+
+各ピクセルに対して図形の内外判定を行う。
+
+サンプルの数を増やすことで、より滑らかに描画できる。
+
+---
+
+# デプステスト
+
+![center width:1000](https://skdassoc.com/img/outer/Vulkan-Tutorial-depth-test.svg)
+
+
+デプスバッファ上の値と比較して、ピクセルを描画するか否か決める。
+
+---
+
+# 透視投影変換行列の罠
 
 前近面のz座標を0とすると、行列は簡単になるが、深度値が必ず1になる。
 
----
+$$
+\begin{bmatrix}
+  1/\tan\theta & 0 & 0 & 0\\
+  0 & aspect/\tan\theta & 0 & 0\\
+  0 & 0 & 1 & 0\\
+  0 & 0 & 1 & 0
+\end{bmatrix}
+\begin{bmatrix}
+  x\\
+  y\\
+  z\\
+  1\\
+\end{bmatrix}
+=
+\begin{bmatrix}
+  x/\tan\theta\\
+  y\cdot aspect/\tan\theta\\
+  z\\
+  z\\
+\end{bmatrix}
+$$
 
-# ラスタライズとマルチサンプリング
+$$
+\frac{1}{z}
+\begin{bmatrix}
+  x/\tan\theta\\
+  y\cdot aspect/\tan\theta\\
+  z\\
+  z\\
+\end{bmatrix}
+=
+\begin{bmatrix}
+  x/z\tan\theta\\
+  y\cdot aspect/z\tan\theta\\
+  1\\
+  1\\
+\end{bmatrix}
+$$
 
 ---
 
 <!-- _class: section -->
-# フラグメントシェーダ
+# フラグメントシェーダと合成
 
 ---
 
 # 色の決定
+
+![center width:1000](https://skdassoc.com/img/outer/Vulkan-Tutorial-stages-fs.svg)
+
 
 フラグメントシェーダの出力がピクセルの色となる。
 
@@ -678,9 +812,14 @@ $p_x,p_y$がビューポート上の座標、$p_z$が深度値となる。
 
 # テクスチャマッピング
 
----
+UV座標をもとに、サンプラー(画像テクスチャ)から色を持ってくる。
 
-# アルファブレンディング
+UV座標や色をいじることで、画像加工ができる：
+
+* 色を$1-(1-src)(1-dst)$とする -> スクリーン
+* UV座標を一定区間でfloorなりceilなりする -> モザイク
+* テクスチャ上の周辺の色と混成する -> ぼかし
+* 等々
 
 ---
 
@@ -695,9 +834,55 @@ $p_x,p_y$がビューポート上の座標、$p_z$が深度値となる。
 
 ---
 
+# ブレンディング
+
+スワップチェーンイメージに結果を合成する。
+
+色も透過率も次のように設定すると、アルファブレンドされる：
+
+* 描画元：$src$
+* 描画先：$dst-src$
+
+---
+
 <!-- _class: section -->
 # ディスクリプタセット
 
 ---
 
-# 
+# シェーダ内で扱う大きなデータ
+
+次のようにしてデータを切り替え**られない**：
+
+1. コマンドバッファ開始
+1. レンダーパス開始
+1. **データ1をセット**するコマンドを積む
+1. **モデル1を描画**するコマンドを積む
+1. **データ2をセット**するコマンドを積む
+1. **モデル2を描画**するコマンドを積む
+1. レンダーパス終了
+1. コマンドバッファ終了
+1. コマンドバッファをキューに提出
+
+---
+
+# ディスクリプタセット
+
+あらかじめメモリ上にデータの組合わせを必要分すべて配置しておき、
+その組み合わせを教える。
+
+1. **組合わせ1をセット**するコマンドを積む
+1. **モデル1を描画**するコマンドを積む
+1. **組合わせ2をセット**するコマンドを積む
+1. **モデル2を描画**するコマンドを積む
+
+---
+
+# つまり
+
+例えば、$l$種類のカメラ、$m$種類の光源、$n$種類の画像を使う場合、
+必要なディスクリプタセットの数は、
+
+$$l\cdot m\cdot n個$$
+
+になる。
