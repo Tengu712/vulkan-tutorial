@@ -1,3 +1,5 @@
+/.vscode/
+
 *.exe
 *.dll
 *.pdb
@@ -8,3 +10,5 @@
 *.so
 *.o
 *.a
+
+*.spv
