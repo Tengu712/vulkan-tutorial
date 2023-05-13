@@ -611,7 +611,9 @@ int main() {
             NULL,
         };
         WARN_VK(vkBeginCommandBuffer(command, &cmd_bi), "failed to begin to record commands to render.");
-        const VkClearValue clear_value = {{ SCREEN_CLEAR_RGBA }};
+        const VkClearValue clear_values[] = {
+            {{ SCREEN_CLEAR_RGBA }},
+        };
         const VkRenderPassBeginInfo rp_bi = {
             VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
             NULL,
@@ -619,7 +621,7 @@ int main() {
             framebuffers[cur_image_idx],
             { {0, 0}, surface_capabilities.currentExtent },
             1,
-            &clear_value,
+            clear_values,
         };
         vkCmdBeginRenderPass(command, &rp_bi, VK_SUBPASS_CONTENTS_INLINE);
         vkCmdBindPipeline(command, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
