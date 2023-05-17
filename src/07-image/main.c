@@ -403,7 +403,7 @@ int main() {
             VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
             NULL,
             0,
-            2,
+            2, // NOTE: 忘れずに。
             desc_set_layout_binds,
         };
         CHECK_VK(vkCreateDescriptorSetLayout(device, &desc_set_layout_ci, NULL, &descriptor_set_layout), "failed to create a descriptor set layout.");
@@ -411,7 +411,12 @@ int main() {
         const VkDescriptorPoolSize desc_pool_sizes[] = {
             {
                 VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-                2,
+                1,
+            },
+            // NOTE: サンプラーに関して追加。
+            {
+                VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                1,
             },
         };
         const VkDescriptorPoolCreateInfo desc_pool_ci = {
@@ -419,7 +424,7 @@ int main() {
             NULL,
             0,
             2,
-            1,
+            2, // NOTE: 忘れずに。
             desc_pool_sizes,
         };
         CHECK_VK(vkCreateDescriptorPool(device, &desc_pool_ci, NULL, &descriptor_pool), "failed to create a descriptor pool.");

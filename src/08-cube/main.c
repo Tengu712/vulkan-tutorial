@@ -459,7 +459,11 @@ int main() {
         const VkDescriptorPoolSize desc_pool_sizes[] = {
             {
                 VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-                2,
+                1,
+            },
+            {
+                VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                1,
             },
         };
         const VkDescriptorPoolCreateInfo desc_pool_ci = {
@@ -467,7 +471,7 @@ int main() {
             NULL,
             0,
             2,
-            1,
+            2,
             desc_pool_sizes,
         };
         CHECK_VK(vkCreateDescriptorPool(device, &desc_pool_ci, NULL, &descriptor_pool), "failed to create a descriptor pool.");
