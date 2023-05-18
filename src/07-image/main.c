@@ -403,7 +403,7 @@ int main() {
             VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
             NULL,
             0,
-            2,
+            2, // NOTE: 忘れずに。
             desc_set_layout_binds,
         };
         CHECK_VK(vkCreateDescriptorSetLayout(device, &desc_set_layout_ci, NULL, &descriptor_set_layout), "failed to create a descriptor set layout.");
@@ -411,7 +411,12 @@ int main() {
         const VkDescriptorPoolSize desc_pool_sizes[] = {
             {
                 VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-                2,
+                1,
+            },
+            // NOTE: サンプラーに関して追加。
+            {
+                VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                1,
             },
         };
         const VkDescriptorPoolCreateInfo desc_pool_ci = {
@@ -419,7 +424,7 @@ int main() {
             NULL,
             0,
             2,
-            1,
+            2, // NOTE: 忘れずに。
             desc_pool_sizes,
         };
         CHECK_VK(vkCreateDescriptorPool(device, &desc_pool_ci, NULL, &descriptor_pool), "failed to create a descriptor pool.");
@@ -753,7 +758,9 @@ int main() {
             NULL,
         };
         WARN_VK(vkBeginCommandBuffer(command, &cmd_bi), "failed to begin to record commands to render.");
-        const VkClearValue clear_value = {{ SCREEN_CLEAR_RGBA }};
+        const VkClearValue clear_values[] = {
+            {{ SCREEN_CLEAR_RGBA }},
+        };
         const VkRenderPassBeginInfo rp_bi = {
             VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
             NULL,
@@ -761,7 +768,7 @@ int main() {
             framebuffers[cur_image_idx],
             { {0, 0}, surface_capabilities.currentExtent },
             1,
-            &clear_value,
+            clear_values,
         };
         vkCmdBeginRenderPass(command, &rp_bi, VK_SUBPASS_CONTENTS_INLINE);
         vkCmdBindPipeline(command, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);

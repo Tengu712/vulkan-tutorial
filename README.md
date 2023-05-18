@@ -1,8 +1,8 @@
-# Vulkan Tutorial Better Than ChatGPT
+# Simplest Vulkan Tutorial in Japanese
 
 ## Outline
 
-速く・かつ正しくVulkanを学習するための、日本語のチュートリアル。
+速く・かつ正しくVulkanを学習するための日本語チュートリアル。
 
 少なくとも、このリポジトリで管理されているすべてファイルは、CC0 パブリックドメインで配布しているため、自由に利用して構わない。
 

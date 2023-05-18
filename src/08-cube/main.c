@@ -299,7 +299,7 @@ int main() {
     }
 
     // depth buffer
-    // NOTE: 
+    // NOTE: 深度値を溜めるためのバッファ。イメージの数だけ作る。
     Texture *depth_buffers = (Texture *)malloc(sizeof(Texture) * image_views_cnt);
     for (int i = 0; i < image_views_cnt; ++i) {
         CHECK_VK(
@@ -459,7 +459,11 @@ int main() {
         const VkDescriptorPoolSize desc_pool_sizes[] = {
             {
                 VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-                2,
+                1,
+            },
+            {
+                VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                1,
             },
         };
         const VkDescriptorPoolCreateInfo desc_pool_ci = {
@@ -467,7 +471,7 @@ int main() {
             NULL,
             0,
             2,
-            1,
+            2,
             desc_pool_sizes,
         };
         CHECK_VK(vkCreateDescriptorPool(device, &desc_pool_ci, NULL, &descriptor_pool), "failed to create a descriptor pool.");
@@ -718,7 +722,7 @@ int main() {
         );
         // image
         CHECK_VK(
-            create_image_texture_from_file(device, &phys_device_memory_prop, command_pool, queue, "../img/shape.png", &img_tex),
+            create_image_texture_from_file(device, &phys_device_memory_prop, command_pool, queue, "../img/cube-texture.png", &img_tex),
             "failed to create a image texture."
         );
         // update
@@ -764,37 +768,38 @@ int main() {
     // models
     Model cube;
     {
+        const float k = 1.0f / 3.0f;
         const Vertex vtxs[24] = {
-            // NOTE: 前
-            { { -0.5f,  0.5f, -0.5f }, { 0.0f, 1.0f } },
-            { {  0.5f,  0.5f, -0.5f }, { 1.0f, 1.0f } },
-            { {  0.5f, -0.5f, -0.5f }, { 1.0f, 0.0f } },
+            // NOTE: 1 前
+            { { -0.5f,  0.5f, -0.5f }, { 0.0f, 0.5f } },
+            { {  0.5f,  0.5f, -0.5f }, {    k, 0.5f } },
+            { {  0.5f, -0.5f, -0.5f }, {    k, 0.0f } },
             { { -0.5f, -0.5f, -0.5f }, { 0.0f, 0.0f } },
-            // NOTE: 奥
-            { {  0.5f,  0.5f,  0.5f }, { 0.0f, 1.0f } },
-            { { -0.5f,  0.5f,  0.5f }, { 1.0f, 1.0f } },
-            { { -0.5f, -0.5f,  0.5f }, { 1.0f, 0.0f } },
-            { {  0.5f, -0.5f,  0.5f }, { 0.0f, 0.0f } },
-            // NOTE: 左
-            { { -0.5f,  0.5f,  0.5f }, { 0.0f, 1.0f } },
-            { { -0.5f,  0.5f, -0.5f }, { 1.0f, 1.0f } },
-            { { -0.5f, -0.5f, -0.5f }, { 1.0f, 0.0f } },
-            { { -0.5f, -0.5f,  0.5f }, { 0.0f, 0.0f } },
-            // NOTE: 右
-            { {  0.5f,  0.5f, -0.5f }, { 0.0f, 1.0f } },
-            { {  0.5f,  0.5f,  0.5f }, { 1.0f, 1.0f } },
-            { {  0.5f, -0.5f,  0.5f }, { 1.0f, 0.0f } },
-            { {  0.5f, -0.5f, -0.5f }, { 0.0f, 0.0f } },
-            // NOTE: 上
+            // NOTE: 6 奥
+            { {  0.5f,  0.5f,  0.5f }, { k * 2.0f, 1.0f } },
+            { { -0.5f,  0.5f,  0.5f }, {     1.0f, 1.0f } },
+            { { -0.5f, -0.5f,  0.5f }, {     1.0f, 0.5f } },
+            { {  0.5f, -0.5f,  0.5f }, { k * 2.0f, 0.5f } },
+            // NOTE: 2 左
+            { { -0.5f,  0.5f,  0.5f }, { k * 1.0f, 0.5f } },
+            { { -0.5f,  0.5f, -0.5f }, { k * 2.0f, 0.5f } },
+            { { -0.5f, -0.5f, -0.5f }, { k * 2.0f, 0.0f } },
+            { { -0.5f, -0.5f,  0.5f }, { k * 1.0f, 0.0f } },
+            // NOTE: 5 右
+            { {  0.5f,  0.5f, -0.5f }, { k * 1.0f, 1.0f } },
+            { {  0.5f,  0.5f,  0.5f }, { k * 2.0f, 1.0f } },
+            { {  0.5f, -0.5f,  0.5f }, { k * 2.0f, 0.5f } },
+            { {  0.5f, -0.5f, -0.5f }, { k * 1.0f, 0.5f } },
+            // NOTE: 4 上
             { { -0.5f, -0.5f, -0.5f }, { 0.0f, 1.0f } },
-            { {  0.5f, -0.5f, -0.5f }, { 1.0f, 1.0f } },
-            { {  0.5f, -0.5f,  0.5f }, { 1.0f, 0.0f } },
-            { { -0.5f, -0.5f,  0.5f }, { 0.0f, 0.0f } },
-            // NOTE: 下
-            { { -0.5f,  0.5f,  0.5f }, { 0.0f, 1.0f } },
-            { {  0.5f,  0.5f,  0.5f }, { 1.0f, 1.0f } },
-            { {  0.5f,  0.5f, -0.5f }, { 1.0f, 0.0f } },
-            { { -0.5f,  0.5f, -0.5f }, { 0.0f, 0.0f } },
+            { {  0.5f, -0.5f, -0.5f }, {    k, 1.0f } },
+            { {  0.5f, -0.5f,  0.5f }, {    k, 0.5f } },
+            { { -0.5f, -0.5f,  0.5f }, { 0.0f, 0.5f } },
+            // NOTE: 3 下
+            { { -0.5f,  0.5f,  0.5f }, { k * 2.0f, 0.5f } },
+            { {  0.5f,  0.5f,  0.5f }, {     1.0f, 0.5f } },
+            { {  0.5f,  0.5f, -0.5f }, {     1.0f, 0.0f } },
+            { { -0.5f,  0.5f, -0.5f }, { k * 2.0f, 0.0f } },
         };
         const uint32_t idxs[36] = {
              0,  1,  2,  0,  2,  3,

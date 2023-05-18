@@ -550,7 +550,7 @@ int main() {
         // NOTE: Vulkanのクリッピング座標系は、
         // NOTE:   * x: [-1, 1] left to right
         // NOTE:   * y: [-1, 1] up to down
-        // NOTE:   * z: [0, 1] far to near (遠近は頂点座標のwで調整するので、方向はどうでもいい)
+        // NOTE:   * z: [0, 1] near to far (遠近は頂点座標のwで調整するので、遠くにあっても遠近感は出ない)
         // NOTE: であるため、上向きの三角形の頂点座標は以下のようになる。
         const Vertex vtxs[3] = {
             { { -0.5f,  0.5f, 0.0f } }, // NOTE: 左下。
@@ -597,7 +597,9 @@ int main() {
             NULL,
         };
         WARN_VK(vkBeginCommandBuffer(command, &cmd_bi), "failed to begin to record commands to render.");
-        const VkClearValue clear_value = {{ SCREEN_CLEAR_RGBA }};
+        const VkClearValue clear_values[] = {
+            {{ SCREEN_CLEAR_RGBA }},
+        };
         const VkRenderPassBeginInfo rp_bi = {
             VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
             NULL,
@@ -605,7 +607,7 @@ int main() {
             framebuffers[cur_image_idx],
             { {0, 0}, surface_capabilities.currentExtent },
             1,
-            &clear_value,
+            clear_values,
         };
         vkCmdBeginRenderPass(command, &rp_bi, VK_SUBPASS_CONTENTS_INLINE);
         // NOTE: パイプラインを関連付ける。
