@@ -133,6 +133,42 @@ int main() {
         CHECK_VK(vkCreateCommandPool(device, &ci, NULL, &command_pool), "failed to create a command pool.");
     }
 
+    // command buffer
+    VkCommandBuffer command_buffer;
+    {
+        const VkCommandBufferAllocateInfo ai = {
+            VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+            NULL,
+            command_pool,
+            VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+            1,
+        };
+        CHECK_VK(vkAllocateCommandBuffers(device, &ai, &command_buffer), "failed to allocate a command buffer.");
+    }
+
+    // fence
+    VkFence fence;
+    {
+        const VkFenceCreateInfo ci = {
+            VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
+            NULL,
+            VK_FENCE_CREATE_SIGNALED_BIT,
+        };
+        CHECK_VK(vkCreateFence(device, &ci, NULL, &fence), "failed to create a fence.");
+    }
+
+    // semaphores
+    VkSemaphore wait_semaphore, signal_semaphore;
+    {
+        const VkSemaphoreCreateInfo ci = {
+            VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
+            NULL,
+            0,
+        };
+        CHECK_VK(vkCreateSemaphore(device, &ci, NULL, &wait_semaphore), "failed to create a wait semaphore.");
+        CHECK_VK(vkCreateSemaphore(device, &ci, NULL, &signal_semaphore), "failed to create a signal semaphore.");
+    }
+
     // surface
     VkSurfaceKHR surface;
     VkSurfaceFormatKHR surface_format;
@@ -284,34 +320,6 @@ int main() {
             ci.pAttachments = &image_views[i];
             CHECK_VK(vkCreateFramebuffer(device, &ci, NULL, &framebuffers[i]), "failed to create a framebuffer.");
         }
-    }
-
-    // command buffer, fence, semaphore
-    FrameData *frame_data = (FrameData *)malloc(sizeof(FrameData) * image_views_cnt);
-    for (uint32_t i = 0; i < image_views_cnt; ++i) {
-        // command buffer
-        const VkCommandBufferAllocateInfo ai = {
-            VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-            NULL,
-            command_pool,
-            VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-            1,
-        };
-        CHECK_VK(vkAllocateCommandBuffers(device, &ai, &frame_data[i].command_buffer), "failed to allocate a command buffers.");
-        // fence
-        const VkFenceCreateInfo fence_ci = {
-            VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
-            NULL,
-            VK_FENCE_CREATE_SIGNALED_BIT,
-        };
-        CHECK_VK(vkCreateFence(device, &fence_ci, NULL, &frame_data[i].fence), "failed to create a fence.");
-        // semaphore
-        const VkSemaphoreCreateInfo semaphore_ci = {
-            VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
-            NULL,
-            0,
-        };
-        CHECK_VK(vkCreateSemaphore(device, &semaphore_ci, NULL, &frame_data[i].semaphore), "failed to create a semaphore.");
     }
 
     // shaders
@@ -698,9 +706,6 @@ int main() {
         );
     }
 
-    // mainloop
-    uint32_t pre_image_idx = 0;
-    uint32_t cur_image_idx = 0;
     // NOTE: 視錘台にアスペクト比が反映されているおかげで、1:1のポリゴンが正方形として描かれる。
     // NOTE: その一方、視錘台の原点からの距離とポリゴンの大きさ(および拡大率)に注意しなければならない。
     // NOTE: 今回は視野角90度、アスペクト比4:3の視錘台であるため、z=500の位置では次の範囲が正規範囲に収まる：
@@ -722,6 +727,8 @@ int main() {
             { 0.0, 0.0, 0.0, 0.0 },
         },
     };
+
+    // mainloop
     while (1) {
         if (glfwWindowShouldClose(window))
             break;
@@ -735,20 +742,20 @@ int main() {
         push_constants[1].rot[2] += 0.01f;
 
         // prepare
-        WARN_VK(vkAcquireNextImageKHR(device, swapchain, UINT64_MAX, frame_data[pre_image_idx].semaphore, VK_NULL_HANDLE, &cur_image_idx), "failed to acquire a next image index.");
-        WARN_VK(vkWaitForFences(device, 1, &frame_data[cur_image_idx].fence, VK_TRUE, UINT64_MAX), "failed to wait for a fence.");
-        WARN_VK(vkResetFences(device, 1, &frame_data[cur_image_idx].fence), "failed to reset a fence.");
-        WARN_VK(vkResetCommandBuffer(frame_data[cur_image_idx].command_buffer, VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT), "failed to reset a command buffer.");
+        int img_idx;
+        WARN_VK(vkAcquireNextImageKHR(device, swapchain, UINT64_MAX, wait_semaphore, VK_NULL_HANDLE, &img_idx), "failed to acquire a next image index.");
+        WARN_VK(vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX), "failed to wait for a fence.");
+        WARN_VK(vkResetFences(device, 1, &fence), "failed to reset a fence.");
+        WARN_VK(vkResetCommandBuffer(command_buffer, VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT), "failed to reset a command buffer.");
 
         // begin
-        const VkCommandBuffer command = frame_data[cur_image_idx].command_buffer;
         const VkCommandBufferBeginInfo cmd_bi = {
             VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
             NULL,
             0,
             NULL,
         };
-        WARN_VK(vkBeginCommandBuffer(command, &cmd_bi), "failed to begin to record commands to render.");
+        WARN_VK(vkBeginCommandBuffer(command_buffer, &cmd_bi), "failed to begin to record commands to render.");
         const VkClearValue clear_values[] = {
             {{ SCREEN_CLEAR_RGBA }},
         };
@@ -756,24 +763,24 @@ int main() {
             VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
             NULL,
             render_pass,
-            framebuffers[cur_image_idx],
+            framebuffers[img_idx],
             { {0, 0}, surface_capabilities.currentExtent },
             1,
             clear_values,
         };
-        vkCmdBeginRenderPass(command, &rp_bi, VK_SUBPASS_CONTENTS_INLINE);
-        vkCmdBindPipeline(command, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+        vkCmdBeginRenderPass(command_buffer, &rp_bi, VK_SUBPASS_CONTENTS_INLINE);
+        vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
 
         // draw
         // NOTE: 今回モデルは一種類しか使わない。
         const VkDeviceSize offset = 0;
-        vkCmdBindVertexBuffers(command, 0, 1, &model.vertex.buffer, &offset);
-        vkCmdBindIndexBuffer(command, model.index.buffer, offset, VK_INDEX_TYPE_UINT32);
+        vkCmdBindVertexBuffers(command_buffer, 0, 1, &model.vertex.buffer, &offset);
+        vkCmdBindIndexBuffer(command_buffer, model.index.buffer, offset, VK_INDEX_TYPE_UINT32);
         for (int i = 0; i < 2; ++i) {
             // NOTE: ディスクリプタセットを適応する。
             // NOTE: 一度適応してからずっと同じものが使われるため、なるべく同じものを連続して使えるような順番で描画したほうが良い。
             vkCmdBindDescriptorSets(
-                command,
+                command_buffer,
                 VK_PIPELINE_BIND_POINT_GRAPHICS,
                 pipeline_layout,
                 0, // NOTE: セット番号。
@@ -782,42 +789,39 @@ int main() {
                 0, // NOTE: ダイナミックオフセットの数。
                 NULL // NOTE: ダイナミックオフセットへのポインタ。
             );
-            vkCmdPushConstants(command, pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PushConstant), (const void *)&push_constants[i]);
-            vkCmdDrawIndexed(command, model.index_cnt, 1, 0, 0, 0);
+            vkCmdPushConstants(command_buffer, pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PushConstant), (const void *)&push_constants[i]);
+            vkCmdDrawIndexed(command_buffer, model.index_cnt, 1, 0, 0, 0);
         }
 
         // end
-        vkCmdEndRenderPass(command);
-        vkEndCommandBuffer(command);
+        vkCmdEndRenderPass(command_buffer);
+        vkEndCommandBuffer(command_buffer);
         const VkPipelineStageFlags wait_stage_mask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
         const VkSubmitInfo submit_info = {
             VK_STRUCTURE_TYPE_SUBMIT_INFO,
             NULL,
             1,
-            &frame_data[pre_image_idx].semaphore,
+            &wait_semaphore,
             &wait_stage_mask,
             1,
-            &command,
+            &command_buffer,
             1,
-            &frame_data[cur_image_idx].semaphore,
+            &signal_semaphore,
         };
-        WARN_VK(vkQueueSubmit(queue, 1, &submit_info, frame_data[cur_image_idx].fence), "failed to submit commands to queue.");
+        WARN_VK(vkQueueSubmit(queue, 1, &submit_info, fence), "failed to submit commands to queue.");
         VkResult res;
         const VkPresentInfoKHR pi = {
             VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
             NULL,
             1,
-            &frame_data[cur_image_idx].semaphore,
+            &signal_semaphore,
             1,
             &swapchain,
-            &cur_image_idx,
+            &img_idx,
             &res,
         };
         WARN_VK(vkQueuePresentKHR(queue, &pi), "failed to enqueue present command.");
         WARN_VK(res, "failed to present.");
-
-        // finish
-        pre_image_idx = cur_image_idx;
     }
 
     // termination
@@ -837,15 +841,16 @@ int main() {
     vkDestroyShaderModule(device, frag_shader, NULL);
     vkDestroyShaderModule(device, vert_shader, NULL);
     for (uint32_t i = 0; i < image_views_cnt; ++i) {
-        vkDestroySemaphore(device, frame_data[i].semaphore, NULL);
-        vkDestroyFence(device, frame_data[i].fence, NULL);
-        vkFreeCommandBuffers(device, command_pool, 1, &frame_data[i].command_buffer);
         vkDestroyFramebuffer(device, framebuffers[i], NULL);
         vkDestroyImageView(device, image_views[i], NULL);
     }
     vkDestroyRenderPass(device, render_pass, NULL);
     vkDestroySwapchainKHR(device, swapchain, NULL);
     vkDestroySurfaceKHR(instance, surface, NULL);
+    vkDestroySemaphore(device, signal_semaphore, NULL);
+    vkDestroySemaphore(device, wait_semaphore, NULL);
+    vkDestroyFence(device, fence, NULL);
+    vkFreeCommandBuffers(device, command_pool, 1, &command_buffer);
     vkDestroyCommandPool(device, command_pool, NULL);
     vkDestroyDevice(device, NULL);
     DESTROY_VULKAN_DEBUG_CALLBACK(instance);
