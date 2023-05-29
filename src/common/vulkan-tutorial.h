@@ -52,14 +52,6 @@
 #    define INST_LAYER_NAMES { }
 #endif
 
-// 1フレームに必要なオブジェクトをまとめた構造体。
-// 特に、ダブルバッファリングを管理するために。
-typedef struct FrameData_t {
-    VkCommandBuffer command_buffer;
-    VkFence fence;
-    VkSemaphore semaphore;
-} FrameData;
-
 // 1バッファに必要なオブジェクトをまとめた構造体。
 // 特に、頂点バッファ、インデックスバッファ、ユニフォームバッファのために。
 typedef struct Buffer_t {
