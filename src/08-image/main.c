@@ -1,13 +1,15 @@
 #include "../common/vulkan-tutorial.h"
 
+#include <math.h>
+
 // A struct for vertex input data.
 typedef struct Vertex_t {
     float pos[3];
+    // NOTE: 各頂点にUV座標を指定する。
+    float uv[2];
 } Vertex;
 
 // A struct for organizing the layout of push constant data.
-// NOTE: プッシュコンスタントの構造。
-// NOTE: のちのち変更されるため、vulkan-tutorial.hではなくここで定義しておく。
 typedef struct PushConstant_t {
     float scl[4];
     float rot[4];
@@ -131,6 +133,42 @@ int main() {
             queue_family_index,
         };
         CHECK_VK(vkCreateCommandPool(device, &ci, NULL, &command_pool), "failed to create a command pool.");
+    }
+
+        // command buffer
+    VkCommandBuffer command_buffer;
+    {
+        const VkCommandBufferAllocateInfo ai = {
+            VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+            NULL,
+            command_pool,
+            VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+            1,
+        };
+        CHECK_VK(vkAllocateCommandBuffers(device, &ai, &command_buffer), "failed to allocate a command buffer.");
+    }
+
+    // fence
+    VkFence fence;
+    {
+        const VkFenceCreateInfo ci = {
+            VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
+            NULL,
+            VK_FENCE_CREATE_SIGNALED_BIT,
+        };
+        CHECK_VK(vkCreateFence(device, &ci, NULL, &fence), "failed to create a fence.");
+    }
+
+    // semaphores
+    VkSemaphore wait_semaphore, signal_semaphore;
+    {
+        const VkSemaphoreCreateInfo ci = {
+            VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
+            NULL,
+            0,
+        };
+        CHECK_VK(vkCreateSemaphore(device, &ci, NULL, &wait_semaphore), "failed to create a wait semaphore.");
+        CHECK_VK(vkCreateSemaphore(device, &ci, NULL, &signal_semaphore), "failed to create a signal semaphore.");
     }
 
     // surface
@@ -286,34 +324,6 @@ int main() {
         }
     }
 
-    // command buffer, fence, semaphore
-    FrameData *frame_data = (FrameData *)malloc(sizeof(FrameData) * image_views_cnt);
-    for (uint32_t i = 0; i < image_views_cnt; ++i) {
-        // command buffer
-        const VkCommandBufferAllocateInfo ai = {
-            VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-            NULL,
-            command_pool,
-            VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-            1,
-        };
-        CHECK_VK(vkAllocateCommandBuffers(device, &ai, &frame_data[i].command_buffer), "failed to allocate a command buffers.");
-        // fence
-        const VkFenceCreateInfo fence_ci = {
-            VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
-            NULL,
-            VK_FENCE_CREATE_SIGNALED_BIT,
-        };
-        CHECK_VK(vkCreateFence(device, &fence_ci, NULL, &frame_data[i].fence), "failed to create a fence.");
-        // semaphore
-        const VkSemaphoreCreateInfo semaphore_ci = {
-            VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
-            NULL,
-            0,
-        };
-        CHECK_VK(vkCreateSemaphore(device, &semaphore_ci, NULL, &frame_data[i].semaphore), "failed to create a semaphore.");
-    }
-
     // shaders
     VkShaderModule vert_shader;
     VkShaderModule frag_shader;
@@ -346,6 +356,96 @@ int main() {
         free(bin_frag);
     }
 
+    // sampler
+    // NOTE: サンプラーを作る。
+    VkSampler sampler;
+    {
+        const VkSamplerCreateInfo ci = {
+            VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+            NULL,
+            0,
+            VK_FILTER_LINEAR,
+            VK_FILTER_LINEAR,
+            VK_SAMPLER_MIPMAP_MODE_NEAREST,
+            VK_SAMPLER_ADDRESS_MODE_REPEAT,
+            VK_SAMPLER_ADDRESS_MODE_REPEAT,
+            VK_SAMPLER_ADDRESS_MODE_REPEAT,
+            0.0,
+            0,
+            1.0,
+            0,
+            VK_COMPARE_OP_NEVER,
+            0.0,
+            0.0,
+            VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE,
+            0,
+        };
+        CHECK_VK(vkCreateSampler(device, &ci, NULL, &sampler), "failed to create a sampler.");
+    }
+
+    // descriptor sets
+    VkDescriptorSetLayout descriptor_set_layout;
+    VkDescriptorPool descriptor_pool;
+    VkDescriptorSet descriptor_set;
+    {
+        // descriptor layout
+        const VkDescriptorSetLayoutBinding desc_set_layout_binds[] = {
+            {
+                0,
+                VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                1,
+                VK_SHADER_STAGE_VERTEX_BIT,
+                NULL,
+            },
+            // NOTE: サンプラーをディスクリプタセットのレイアウトに追加する。
+            // NOTE: フラグメントシェーダに関連付ける。
+            {
+                1,
+                VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                1,
+                VK_SHADER_STAGE_FRAGMENT_BIT,
+                NULL,
+            },
+        };
+        const VkDescriptorSetLayoutCreateInfo desc_set_layout_ci = {
+            VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+            NULL,
+            0,
+            2, // NOTE: 忘れずに。
+            desc_set_layout_binds,
+        };
+        CHECK_VK(vkCreateDescriptorSetLayout(device, &desc_set_layout_ci, NULL, &descriptor_set_layout), "failed to create a descriptor set layout.");
+        // descriptor pool
+        const VkDescriptorPoolSize desc_pool_sizes[] = {
+            {
+                VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                1,
+            },
+            // NOTE: サンプラーに関して追加。
+            {
+                VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                1,
+            },
+        };
+        const VkDescriptorPoolCreateInfo desc_pool_ci = {
+            VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+            NULL,
+            0,
+            2,
+            2, // NOTE: 忘れずに。
+            desc_pool_sizes,
+        };
+        CHECK_VK(vkCreateDescriptorPool(device, &desc_pool_ci, NULL, &descriptor_pool), "failed to create a descriptor pool.");
+        const VkDescriptorSetAllocateInfo ai = {
+            VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+            NULL,
+            descriptor_pool,
+            1,
+            &descriptor_set_layout,
+        };
+        CHECK_VK(vkAllocateDescriptorSets(device, &ai, &descriptor_set), "failed to allocate a descriptor set.");
+    }
+
     // pipeline
     VkPipelineLayout pipeline_layout;
     VkPipeline pipeline;
@@ -361,8 +461,8 @@ int main() {
             VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
             NULL,
             0,
-            0,
-            NULL,
+            1,
+            &descriptor_set_layout,
             1,
             push_constant_ranges,
         };
@@ -396,6 +496,9 @@ int main() {
         };
         const VkVertexInputAttributeDescription vert_inp_attr_dcs[] = {
             { 0, 0, VK_FORMAT_R32G32B32_SFLOAT, 0 },
+            // NOTE: UV座標を追加する。
+            // NOTE: これ自動化できないの辛い……。
+            { 1, 0, VK_FORMAT_R32G32_SFLOAT, sizeof(float) * 3 },
         };
         const VkPipelineVertexInputStateCreateInfo vert_inp_ci = {
             VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
@@ -403,7 +506,7 @@ int main() {
             0,
             1,
             vert_inp_binding_dcs,
-            1,
+            2, // NOTE: ここも変える。
             vert_inp_attr_dcs,
         };
 
@@ -521,38 +624,104 @@ int main() {
         CHECK_VK(vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, cis, NULL, &pipeline), "failed to create a pipeline.");
     }
 
-    // models
-    Model models[2];
-    // model 0
+    // descriptor sets for cameras
+    Buffer uniform_buffer;
+    Texture img_tex;
     {
-        // NOTE: 正三角形。
-        const Vertex vtxs[3] = {
-            { { -0.5f,   0.25f, 0.0f } },
-            { {  0.5f,   0.25f, 0.0f } },
-            { {  0.0f, -0.616f, 0.0f } },
+        // camera
+        const float div_tanpov = 1.0f / tan(3.1415f / 4.0f);
+        CameraData camera = {
+            {
+                1.0f, 0.0f, 0.0f, 0.0f,
+                0.0f, 1.0f, 0.0f, 0.0f,
+                0.0f, 0.0f, 1.0f, 0.0f,
+                0.0f, 0.0f, 320.0f, 1.0f,
+            },
+            {
+                div_tanpov,                     0.0f, 0.0f, 0.0f,
+                      0.0f, div_tanpov * 4.0f / 3.0f, 0.0f, 0.0f,
+                      0.0f,                     0.0f, 1.0f, 1.0f,
+                      0.0f,                     0.0f, 0.0f, 0.0f,
+            },
         };
-        const uint32_t idxs[3] = { 0, 1, 2 };
         CHECK_VK(
-            create_model(
+            create_buffer(
                 device,
                 &phys_device_memory_prop,
-                3,
-                sizeof(Vertex) * 3,
-                (const float *)vtxs,
-                (const uint32_t *)idxs,
-                &models[0]
+                sizeof(CameraData),
+                VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+                VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                &uniform_buffer
             ),
-            "failed to create the first model."
+            "failed to create a uniform buffer."
         );
+        CHECK_VK(
+            map_memory(
+                device,
+                uniform_buffer.memory,
+                (void *)&camera,
+                sizeof(CameraData)
+            ),
+            "failed to map a camera data to a uniform buffer."
+        );
+        // image
+        // NOTE: イメージテクスチャを作る。
+        // NOTE: 汎用性があるロジックであるため、関数に切り分けた。common/image.cで定義されている。
+        CHECK_VK(
+            create_image_texture_from_file(device, &phys_device_memory_prop, command_pool, queue, "../img/shape.png", &img_tex),
+            "failed to create a image texture."
+        );
+        // update
+        const VkDescriptorBufferInfo bi = {
+            uniform_buffer.buffer,
+            0,
+            VK_WHOLE_SIZE,
+        };
+        // NOTE: イメージテクスチャをディスクリプタセットに設定する。
+        const VkDescriptorImageInfo ii = {
+            sampler,
+            img_tex.view,
+            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+        };
+        const VkWriteDescriptorSet write_desc_sets[] = {
+            {
+                VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                NULL,
+                descriptor_set,
+                0,
+                0,
+                1,
+                VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                NULL,
+                &bi,
+                NULL,
+            },
+            // NOTE: ここも追加。
+            {
+                VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                NULL,
+                descriptor_set,
+                1,
+                0,
+                1,
+                VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                &ii,
+                NULL,
+                NULL,
+            },
+        };
+        vkUpdateDescriptorSets(device, 2, write_desc_sets, 0, NULL);
     }
-    // model 1
+
+    // model
+    Model model;
     {
-        // NOTE: 正方形。
+        // NOTE: UV座標を指定する。左上原点であることに注意する。
         const Vertex vtxs[4] = {
-            { { -0.5f,  0.5f, 0.0f } }, // NOTE: 左下。
-            { {  0.5f,  0.5f, 0.0f } }, // NOTE: 右下。
-            { {  0.5f, -0.5f, 0.0f } }, // NOTE: 右上。
-            { { -0.5f, -0.5f, 0.0f } }, // NOTE: 左上。
+            { { -0.5f,  0.5f, 0.0f }, { 0.0f, 1.0f } },
+            { {  0.5f,  0.5f, 0.0f }, { 1.0f, 1.0f } },
+            { {  0.5f, -0.5f, 0.0f }, { 1.0f, 0.0f } },
+            { { -0.5f, -0.5f, 0.0f }, { 0.0f, 0.0f } },
         };
         const uint32_t idxs[6] = { 0, 1, 2, 0, 2, 3 };
         CHECK_VK(
@@ -563,54 +732,39 @@ int main() {
                 sizeof(Vertex) * 4,
                 (const float *)vtxs,
                 (const uint32_t *)idxs,
-                &models[1]
+                &model
             ),
-            "failed to create the second model."
+            "failed to create a model."
         );
     }
 
-    // mainloop
-    uint32_t pre_image_idx = 0;
-    uint32_t cur_image_idx = 0;
-    // NOTE: 二つのモデル(正確には二回の描画)のためのプッシュコンスタントをここで定義しておく。
-    PushConstant push_constants[2] = {
-        {
-            { 0.5, 0.5, 1.0, 0.0 }, // NOTE: x,y方向に0.5倍
-            { 0.0, 0.0, 0.0, 0.0 },
-            { -0.5, -0.5, 0.5, 0.0 }, // NOTE: x,y方向に-0.5、z方向に0.5移動
-        },
-        {
-            { 0.5, 0.5, 1.0, 0.0 }, // NOTE: x,y方向に0.5倍
-            { 0.0, 0.0, 0.0, 0.0 },
-            { 0.25, 0.25, 0.5, 0.0 }, // NOTE: x,y方向に0.25、z方向に0.5移動
-        },
+    const PushConstant push_constant = {
+        { 320.0f, 320.0f, 1.0f, 0.0f },
+        { 0.0f, 0.0f, 0.0f, 0.0f },
+        { 0.0f, 0.0f, 0.0f, 0.0f },
     };
+
+    // mainloop
     while (1) {
         if (glfwWindowShouldClose(window))
             break;
         glfwPollEvents();
 
-        // NOTE: 毎フレームZ軸回りに0.01ラジアン回転する。
-        push_constants[0].rot[2] += 0.01f;
-        // NOTE: 毎フレームX軸Y軸回りに0.01ラジアン回転する。
-        push_constants[1].rot[0] += 0.01f;
-        push_constants[1].rot[1] += 0.01f;
-
         // prepare
-        WARN_VK(vkAcquireNextImageKHR(device, swapchain, UINT64_MAX, frame_data[pre_image_idx].semaphore, VK_NULL_HANDLE, &cur_image_idx), "failed to acquire a next image index.");
-        WARN_VK(vkWaitForFences(device, 1, &frame_data[cur_image_idx].fence, VK_TRUE, UINT64_MAX), "failed to wait for a fence.");
-        WARN_VK(vkResetFences(device, 1, &frame_data[cur_image_idx].fence), "failed to reset a fence.");
-        WARN_VK(vkResetCommandBuffer(frame_data[cur_image_idx].command_buffer, VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT), "failed to reset a command buffer.");
+        int img_idx;
+        WARN_VK(vkAcquireNextImageKHR(device, swapchain, UINT64_MAX, wait_semaphore, VK_NULL_HANDLE, &img_idx), "failed to acquire a next image index.");
+        WARN_VK(vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX), "failed to wait for a fence.");
+        WARN_VK(vkResetFences(device, 1, &fence), "failed to reset a fence.");
+        WARN_VK(vkResetCommandBuffer(command_buffer, VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT), "failed to reset a command buffer.");
 
         // begin
-        const VkCommandBuffer command = frame_data[cur_image_idx].command_buffer;
         const VkCommandBufferBeginInfo cmd_bi = {
             VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
             NULL,
             0,
             NULL,
         };
-        WARN_VK(vkBeginCommandBuffer(command, &cmd_bi), "failed to begin to record commands to render.");
+        WARN_VK(vkBeginCommandBuffer(command_buffer, &cmd_bi), "failed to begin to record commands to render.");
         const VkClearValue clear_values[] = {
             {{ SCREEN_CLEAR_RGBA }},
         };
@@ -618,80 +772,91 @@ int main() {
             VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
             NULL,
             render_pass,
-            framebuffers[cur_image_idx],
+            framebuffers[img_idx],
             { {0, 0}, surface_capabilities.currentExtent },
             1,
             clear_values,
         };
-        vkCmdBeginRenderPass(command, &rp_bi, VK_SUBPASS_CONTENTS_INLINE);
-        vkCmdBindPipeline(command, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+        vkCmdBeginRenderPass(command_buffer, &rp_bi, VK_SUBPASS_CONTENTS_INLINE);
+        vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
 
         // draw
-        // NOTE: 二つのモデルを描画する。
-        for (int i = 0; i < 2; ++i) {
-            const VkDeviceSize offset = 0;
-            vkCmdBindVertexBuffers(command, 0, 1, &models[i].vertex.buffer, &offset);
-            vkCmdBindIndexBuffer(command, models[i].index.buffer, offset, VK_INDEX_TYPE_UINT32);
-            vkCmdPushConstants(command, pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PushConstant), (const void *)&push_constants[i]);
-            vkCmdDrawIndexed(command, models[i].index_cnt, 1, 0, 0, 0);
-        }
+        const VkDeviceSize offset = 0;
+        vkCmdBindVertexBuffers(command_buffer, 0, 1, &model.vertex.buffer, &offset);
+        vkCmdBindIndexBuffer(command_buffer, model.index.buffer, offset, VK_INDEX_TYPE_UINT32);
+        vkCmdBindDescriptorSets(
+            command_buffer,
+            VK_PIPELINE_BIND_POINT_GRAPHICS,
+            pipeline_layout,
+            0,
+            1,
+            &descriptor_set,
+            0,
+            NULL
+        );
+        vkCmdPushConstants(command_buffer, pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PushConstant), (const void *)&push_constant);
+        vkCmdDrawIndexed(command_buffer, model.index_cnt, 1, 0, 0, 0);
 
         // end
-        vkCmdEndRenderPass(command);
-        vkEndCommandBuffer(command);
+        vkCmdEndRenderPass(command_buffer);
+        vkEndCommandBuffer(command_buffer);
         const VkPipelineStageFlags wait_stage_mask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
         const VkSubmitInfo submit_info = {
             VK_STRUCTURE_TYPE_SUBMIT_INFO,
             NULL,
             1,
-            &frame_data[pre_image_idx].semaphore,
+            &wait_semaphore,
             &wait_stage_mask,
             1,
-            &command,
+            &command_buffer,
             1,
-            &frame_data[cur_image_idx].semaphore,
+            &signal_semaphore,
         };
-        WARN_VK(vkQueueSubmit(queue, 1, &submit_info, frame_data[cur_image_idx].fence), "failed to submit commands to queue.");
+        WARN_VK(vkQueueSubmit(queue, 1, &submit_info, fence), "failed to submit commands to queue.");
         VkResult res;
         const VkPresentInfoKHR pi = {
             VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
             NULL,
             1,
-            &frame_data[cur_image_idx].semaphore,
+            &signal_semaphore,
             1,
             &swapchain,
-            &cur_image_idx,
+            &img_idx,
             &res,
         };
         WARN_VK(vkQueuePresentKHR(queue, &pi), "failed to enqueue present command.");
         WARN_VK(res, "failed to present.");
-
-        // finish
-        pre_image_idx = cur_image_idx;
     }
 
     // termination
     vkDeviceWaitIdle(device);
-    for (int i = 0; i < 2; ++i) {
-        vkFreeMemory(device, models[i].vertex.memory, NULL);
-        vkFreeMemory(device, models[i].index.memory, NULL);
-        vkDestroyBuffer(device, models[i].vertex.buffer, NULL);
-        vkDestroyBuffer(device, models[i].index.buffer, NULL);
-    }
+    vkFreeMemory(device, model.vertex.memory, NULL);
+    vkFreeMemory(device, model.index.memory, NULL);
+    vkDestroyBuffer(device, model.vertex.buffer, NULL);
+    vkDestroyBuffer(device, model.index.buffer, NULL);
+    vkFreeMemory(device, uniform_buffer.memory, NULL);
+    vkDestroyBuffer(device, uniform_buffer.buffer, NULL);
+    vkFreeMemory(device, img_tex.memory, NULL);
+    vkDestroyImageView(device, img_tex.view, NULL);
+    vkDestroyImage(device, img_tex.image, NULL);
     vkDestroyPipeline(device, pipeline, NULL);
     vkDestroyPipelineLayout(device, pipeline_layout, NULL);
+    vkDestroyDescriptorPool(device, descriptor_pool, NULL);
+    vkDestroyDescriptorSetLayout(device, descriptor_set_layout, NULL);
+    vkDestroySampler(device, sampler, NULL);
     vkDestroyShaderModule(device, frag_shader, NULL);
     vkDestroyShaderModule(device, vert_shader, NULL);
     for (uint32_t i = 0; i < image_views_cnt; ++i) {
-        vkDestroySemaphore(device, frame_data[i].semaphore, NULL);
-        vkDestroyFence(device, frame_data[i].fence, NULL);
-        vkFreeCommandBuffers(device, command_pool, 1, &frame_data[i].command_buffer);
         vkDestroyFramebuffer(device, framebuffers[i], NULL);
         vkDestroyImageView(device, image_views[i], NULL);
     }
     vkDestroyRenderPass(device, render_pass, NULL);
     vkDestroySwapchainKHR(device, swapchain, NULL);
     vkDestroySurfaceKHR(instance, surface, NULL);
+    vkDestroySemaphore(device, signal_semaphore, NULL);
+    vkDestroySemaphore(device, wait_semaphore, NULL);
+    vkDestroyFence(device, fence, NULL);
+    vkFreeCommandBuffers(device, command_pool, 1, &command_buffer);
     vkDestroyCommandPool(device, command_pool, NULL);
     vkDestroyDevice(device, NULL);
     DESTROY_VULKAN_DEBUG_CALLBACK(instance);
